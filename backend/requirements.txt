@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pymongo
+python-jose[cryptography]
+bcrypt
+python-multipart
+python-dotenv
+pdfplumber
+sentence-transformers
+chromadb
+groq

@@ -1,0 +1,33 @@
+==============================
+ EY AGENTIC RAG — START COMMANDS
+==============================
+
+1. Start MongoDB (if not running)
+----------------------------------
+net start MongoDB
+
+
+2. Start Backend (Terminal 1)
+------------------------------
+cd C:\Users\LENOVO\Desktop\ey-agentic-rag\backend
+uvicorn main:app --reload
+
+→ Wait for: ✅ Embedding model warmed up
+
+
+3. Start Frontend (Terminal 2)
+--------------------------------
+cd C:\Users\LENOVO\Desktop\ey-agentic-rag\frontend
+npm run dev
+
+
+4. Open in browser
+-------------------
+http://localhost:5173
+
+
+==============================
+ DEFAULT ACCOUNTS
+==============================
+Admin  →  admin@gmail.com  /  admin
+User   →  user@gmail.com   /  user
