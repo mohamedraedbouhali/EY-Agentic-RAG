@@ -4,7 +4,7 @@ import os
 
 load_dotenv()
 
-client = MongoClient(os.getenv("MONGO_URL", "mongodb://localhost:27017"))
+client = MongoClient(os.getenv("MONGO_URL", "mongodb://localhost:27017"), serverSelectionTimeoutMS=5000)
 db     = client[os.getenv("MONGO_DB", "ey_rag")]
 
 users_col = db["users"]

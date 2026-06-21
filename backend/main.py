@@ -23,7 +23,7 @@ app.include_router(search.router)
 @app.on_event("startup")
 def warmup():
     try:
-        from rag.embedder import embed_query
+        from rag.step4_embedder import embed_query
         embed_query("warmup")
         print("✅  Embedding model warmed up")
     except Exception as e:

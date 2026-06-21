@@ -1,0 +1,55 @@
+{
+  "country": [
+    "Cameroun",
+    "Cote d'Ivoire",
+    "Guinee",
+    "Mali",
+    "Maroc",
+    "Mauritanie",
+    "Niger",
+    "RCA",
+    "RDC",
+    "Tunisie"
+  ],
+  "region": [
+    "Afrique centrale",
+    "Afrique de l'Ouest",
+    "Maghreb"
+  ],
+  "domain": [
+    "Agriculture",
+    "Eau & Assainissement",
+    "Education",
+    "Energie",
+    "Environnement",
+    "Finance & Audit",
+    "Protection sociale",
+    "Sante"
+  ],
+  "donor": [
+    "Banque Mondiale",
+    "Enabel / DGD",
+    "KfW / GIZ",
+    "UNFPA",
+    "UNICEF",
+    "Union Europeenne"
+  ],
+  "year": [
+    "2001",
+    "2006",
+    "2009",
+    "2011",
+    "2014",
+    "2015",
+    "2017",
+    "2018",
+    "2019",
+    "2020",
+    "2021",
+    "2022",
+    "2023",
+    "2024",
+    "2025",
+    "2026"
+  ]
+}

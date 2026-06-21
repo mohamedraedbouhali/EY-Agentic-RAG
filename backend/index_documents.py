@@ -5,19 +5,25 @@ Re-run if you add or replace PDF files in data/.
 """
 import sys
 import os
+import json
 
-# Allow imports from backend root
+# Force UTF-8 output on Windows
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 from dotenv import load_dotenv
 load_dotenv()
 
-from rag.extractor    import load_all_pdfs
-from rag.chunker      import split_into_chunks
-from rag.embedder     import embed_documents
-from rag.vector_store import store_chunks, collection_count, clear_collection
+from rag.step1_extractor    import load_all_pdfs
+from rag.step3_chunker      import split_into_chunks
+from rag.step4_embedder     import embed_documents
+from rag.step5_vector_store import store_chunks, collection_count, clear_collection
+from rag.step2_metadata     import extract_metadata
 
-DATA_FOLDER = os.path.join(os.path.dirname(__file__), "..", "data")
+DATA_FOLDER    = os.path.join(os.path.dirname(__file__), "..", "data")
+FILTERS_CACHE  = os.path.join(os.path.dirname(__file__), "filters_cache.json")
 
 
 def main():
@@ -45,30 +51,69 @@ def main():
     if not documents:
         print("No usable PDFs found.")
         return
-    print(f"  → {len(documents)} documents loaded")
+    print(f"  -> {len(documents)} documents loaded")
 
-    # Step 2 — Chunk
-    print("\n[2/3] Splitting into chunks (size=300, overlap=30)...")
-    all_chunks = []
+    # Step 2 — Chunk + extract metadata
+    print("\n[2/3] Splitting into chunks and extracting metadata...")
+    all_chunks  = []
+    filter_values = {"country": set(), "region": set(), "domain": set(), "donor": set(), "year": set()}
+    tdr_docs:     list[str] = []
+    non_tdr_docs: list[str] = []
+
     for doc in documents:
+        meta = extract_metadata(doc["text"], doc["filename"])
+
+        # Collect available filter values (exclude "Inconnu" and boolean/float fields)
+        for key in ("country", "region", "domain", "donor", "year"):
+            val = meta.get(key, "Inconnu")
+            if val != "Inconnu":
+                filter_values[key].add(val)
+
         chunks = split_into_chunks(doc["text"], doc["filename"])
+        for chunk in chunks:
+            chunk.update(meta)
         all_chunks.extend(chunks)
-        print(f"  {doc['filename']}: {len(chunks)} chunks")
-    print(f"  → {len(all_chunks)} total chunks")
+
+        # TDR classification badge
+        tdr_badge = f"[TDR {meta['tdr_confidence']*100:.0f}%]" if meta["is_tdr"] else "[NON-TDR]"
+        if meta["is_tdr"]:
+            tdr_docs.append(doc["filename"])
+        else:
+            non_tdr_docs.append(doc["filename"])
+
+        print(
+            f"  {tdr_badge:<12} {doc['filename']}: {len(chunks)} chunks"
+            f" | {meta['tdr_label']:<16} (score {meta['tdr_score']:+.0f})"
+            f" | {meta['domain']} | {meta['country']} | {meta['year']}"
+        )
+
+    print(f"\n  -> {len(all_chunks)} total chunks")
+    print(f"  -> TDR documents    : {len(tdr_docs)}")
+    print(f"  -> Non-TDR documents: {len(non_tdr_docs)}")
+    if non_tdr_docs:
+        print("  -> Non-TDR list:")
+        for fn in non_tdr_docs:
+            print(f"       - {fn}")
+
+    # Save filter values for the API
+    cache = {k: sorted(v) for k, v in filter_values.items()}
+    with open(FILTERS_CACHE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+    print(f"  -> Filter cache saved ({sum(len(v) for v in cache.values())} values)")
 
     # Step 3 — Embed + Store
     print("\n[3/3] Embedding and storing chunks...")
     BATCH = 64
     for i in range(0, len(all_chunks), BATCH):
-        batch = all_chunks[i: i + BATCH]
-        texts = [c["text"] for c in batch]
+        batch      = all_chunks[i: i + BATCH]
+        texts      = [c["text"] for c in batch]
         embeddings = embed_documents(texts)
         store_chunks(batch, embeddings)
         print(f"  Stored {min(i + BATCH, len(all_chunks))}/{len(all_chunks)} chunks")
 
     print("\n" + "=" * 60)
-    print(f"Done! {len(all_chunks)} chunks indexed from {len(documents)} documents.")
-    print("You can now start the backend and use the search.")
+    print(f"Done! {len(all_chunks)} chunks indexed from {len(documents)} documents "
+          f"({len(tdr_docs)} TDR, {len(non_tdr_docs)} non-TDR).")
     print("=" * 60)
 
 

@@ -9,3 +9,7 @@ pdfplumber
 sentence-transformers
 chromadb
 groq
+pdf2image
+Pillow
+numpy
+easyocr

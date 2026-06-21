@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
@@ -15,36 +15,111 @@ const SUGGESTIONS = [
 
 export default function UserDashboard() {
   const { user, logout } = useAuth()
-  const navigate         = useNavigate()
+  const navigate = useNavigate()
 
-  const [query, setQuery]         = useState('')
-  const [answer, setAnswer]       = useState('')
-  const [sources, setSources]     = useState([])
-  const [loading, setLoading]     = useState(false)
-  const [hasSearched, setHasSearched] = useState(false)
-  const [error, setError]         = useState('')
+  const [query, setQuery]           = useState('')
+  const [messages, setMessages]     = useState([])   // [{role, content, sources?}]
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState('')
   const [profileOpen, setProfileOpen] = useState(false)
+  const [expandedSources, setExpandedSources] = useState({})
+  const [availableFilters, setAvailableFilters] = useState({})
+  const [activeFilters, setActiveFilters]       = useState({ country: [], region: [], domain: [], donor: [], year: [] })
+  const [filtersOpen, setFiltersOpen]           = useState(false)
+
+  const bottomRef  = useRef(null)
+  const inputRef   = useRef(null)
+  const textareaRef = useRef(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  useEffect(() => {
+    api.getFilters().then(setAvailableFilters).catch(() => {})
+  }, [])
+
+  const autoResize = () => {
+    const ta = textareaRef.current
+    if (ta) {
+      ta.style.height = 'auto'
+      ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'
+    }
+  }
 
   const doSearch = useCallback(async (q = query) => {
-    if (!q.trim()) return
+    const trimmed = q.trim()
+    if (!trimmed || loading) return
+
+    const prevMessages = messages
+    setMessages(prev => [...prev, { role: 'user', content: trimmed }])
+    setQuery('')
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
     setLoading(true)
-    setHasSearched(true)
     setError('')
-    setAnswer('')
-    setSources([])
+
+    const history = prevMessages.map(m => ({ role: m.role, content: m.content }))
+
     try {
-      const data = await api.search(q)
-      setAnswer(data.answer || '')
-      setSources(data.sources || [])
+      const data = await api.search(trimmed, history, activeFilters)
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: data.answer || '',
+        sources: data.sources || [],
+        similar_missions: data.similar_missions || [],
+      }])
     } catch (err) {
       setError(err.message || 'Erreur lors de la recherche.')
+      // Keep the user message visible on error instead of reverting
     } finally {
       setLoading(false)
+      inputRef.current?.focus()
     }
-  }, [query])
+  }, [query, messages, loading, activeFilters])
 
   const handleSubmit    = e => { e.preventDefault(); doSearch() }
-  const handleSuggestion = s => { setQuery(s); doSearch(s) }
+  const handleSuggestion = s => doSearch(s)
+  const handleKeyDown   = e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSearch() }
+  }
+  const handleNewConversation = () => {
+    setMessages([])
+    setError('')
+    setQuery('')
+    setExpandedSources({})
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    inputRef.current?.focus()
+  }
+  const toggleSources = idx =>
+    setExpandedSources(prev => ({ ...prev, [idx]: !prev[idx] }))
+
+  const toggleFilter = (category, value) => {
+    setActiveFilters(prev => {
+      const current = prev[category] || []
+      return {
+        ...prev,
+        [category]: current.includes(value)
+          ? current.filter(v => v !== value)
+          : [...current, value],
+      }
+    })
+  }
+
+  const clearFilters = () =>
+    setActiveFilters({ country: [], region: [], domain: [], donor: [], year: [] })
+
+  const activeFilterCount = useMemo(
+    () => Object.values(activeFilters).reduce((sum, arr) => sum + arr.length, 0),
+    [activeFilters]
+  )
+
+  const FILTER_LABELS = {
+    domain:  'Domaine',
+    country: 'Pays',
+    region:  'Région',
+    donor:   'Bailleur de fonds',
+    year:    'Année',
+  }
 
   return (
     <>
@@ -60,13 +135,17 @@ export default function UserDashboard() {
           </div>
         </div>
         <div className={styles.headerRight}>
+          {messages.length > 0 && (
+            <button className={styles.newChatBtn} onClick={handleNewConversation}>
+              <PlusIcon /> <span>Nouvelle conversation</span>
+            </button>
+          )}
           <div className={styles.userChip} onClick={() => setProfileOpen(true)}
-            style={{ cursor:'pointer' }} title="Modifier mon profil">
+            style={{ cursor: 'pointer' }} title="Modifier mon profil">
             <div className={styles.avatar}>
               {user?.avatar
                 ? <img src={user.avatar} alt="avatar" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
-                : <>{user?.first_name?.[0]}{user?.last_name?.[0]}</>
-              }
+                : <>{user?.first_name?.[0]}{user?.last_name?.[0]}</>}
             </div>
             <div className={styles.userInfo}>
               <span className={styles.userName}>{user?.first_name} {user?.last_name}</span>
@@ -78,8 +157,7 @@ export default function UserDashboard() {
             <div className={styles.avatarSmall}>
               {user?.avatar
                 ? <img src={user.avatar} alt="avatar" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} />
-                : <>{user?.first_name?.[0]}{user?.last_name?.[0]}</>
-              }
+                : <>{user?.first_name?.[0]}{user?.last_name?.[0]}</>}
             </div>
           </button>
           <button className={styles.logoutBtn} onClick={() => { logout(); navigate('/') }}>
@@ -88,102 +166,219 @@ export default function UserDashboard() {
         </div>
       </header>
 
-      {/* ── MAIN ───────────────────────────────────────────────── */}
-      <main className={styles.main}>
+      {/* ── CHAT AREA ──────────────────────────────────────────── */}
+      <div className={styles.chatArea}>
+        <div className={styles.chatInner}>
 
-        {/* Search bar */}
-        <form className={styles.searchForm} onSubmit={handleSubmit}>
-          <div className={styles.searchBox}>
-            <SearchIcon />
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Posez une question sur les TdR… ex : quels sont les livrables attendus ?"
-              className={styles.searchInput}
-              autoFocus
-            />
-            {query && (
-              <button type="button" className={styles.clearBtn}
-                onClick={() => { setQuery(''); setHasSearched(false); setAnswer(''); setSources([]); setError('') }}>
-                ×
-              </button>
-            )}
-          </div>
-          <button type="submit" className={styles.searchBtn} disabled={loading || !query.trim()}>
-            {loading ? <SmallSpinner /> : <>Rechercher <SearchArrow /></>}
-          </button>
-        </form>
-
-        {/* ── Initial state ── */}
-        {!hasSearched && !loading && (
-          <div className={styles.emptyState}>
-            <div className={styles.emptyIcon}><BigSearchIcon /></div>
-            <h3 className={styles.emptyTitle}>Interrogez les Documents TdR</h3>
-            <p className={styles.emptyText}>
-              Posez une question en langage naturel. Le système RAG retrouvera
-              les passages pertinents et générera une réponse basée sur vos documents.
-            </p>
-            <div className={styles.suggestions}>
-              <span className={styles.suggestLabel}>Exemples :</span>
-              {SUGGESTIONS.map(s => (
-                <button key={s} className={styles.suggestChip}
-                  onClick={() => handleSuggestion(s)}>{s}</button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Loading ── */}
-        {loading && (
-          <div className={styles.loadingState}>
-            <div className={styles.loadingSpinner} />
-            <p>Analyse sémantique en cours…</p>
-          </div>
-        )}
-
-        {/* ── Error ── */}
-        {error && !loading && (
-          <div className={styles.ragBanner}>
-            <RagIcon />
-            <div>
-              <strong>Erreur</strong>
-              <p>{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* ── Answer + Sources ── */}
-        {hasSearched && !loading && !error && answer && (
-          <>
-            <div className={styles.answerBox}>
-              <div className={styles.answerHeader}>
-                <SparkleIcon /> Réponse générée par IA
+          {/* Empty state */}
+          {messages.length === 0 && !loading && !error && (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyIcon}><BigSearchIcon /></div>
+              <h3 className={styles.emptyTitle}>Interrogez les Documents TdR</h3>
+              <p className={styles.emptyText}>
+                Posez une question en langage naturel. Le système retrouvera
+                les passages pertinents et générera une réponse basée sur vos documents.
+              </p>
+              <div className={styles.suggestions}>
+                <span className={styles.suggestLabel}>Exemples :</span>
+                {SUGGESTIONS.map(s => (
+                  <button key={s} className={styles.suggestChip}
+                    onClick={() => handleSuggestion(s)}>{s}</button>
+                ))}
               </div>
-              <p className={styles.answerText}>{answer}</p>
             </div>
+          )}
 
-            {sources.length > 0 && (
-              <div className={styles.sourcesSection}>
-                <p className={styles.sourcesTitle}>
-                  <DocIcon /> Sources utilisées ({sources.length})
-                </p>
-                <div className={styles.sourcesList}>
-                  {sources.map((s, i) => (
-                    <div key={i} className={styles.sourceCard}>
-                      <div className={styles.sourceTop}>
-                        <span className={styles.sourceFile}>{s.filename}</span>
-                        <span className={styles.sourcePage}>Page {s.page}</span>
-                        <span className={styles.sourceScore}>{Math.round(s.score * 100)}%</span>
-                      </div>
-                      <p className={styles.sourceExcerpt}>{s.excerpt}</p>
+          {/* Message list */}
+          {messages.map((msg, idx) => (
+            msg.role === 'user' ? (
+              <div key={idx} className={styles.userTurn}>
+                <div className={styles.userBubble}>{msg.content}</div>
+              </div>
+            ) : (
+              <div key={idx} className={styles.assistantTurn}>
+                <div className={styles.assistantIcon}><SparkleIcon /></div>
+                <div className={styles.assistantContent}>
+                  <p className={styles.answerText}>{msg.content}</p>
+                  {msg.sources?.length > 0 && (
+                    <div className={styles.sourcesBlock}>
+                      <button className={styles.sourcesToggle} onClick={() => toggleSources(idx)}>
+                        <DocIcon />
+                        {expandedSources[idx]
+                          ? 'Masquer les sources'
+                          : `${msg.sources.length} source${msg.sources.length > 1 ? 's' : ''}`}
+                        <ChevronIcon open={expandedSources[idx]} />
+                      </button>
+                      {expandedSources[idx] && (
+                        <div className={styles.sourcesList}>
+                          {msg.sources.map((s, i) => (
+                            <div key={i} className={styles.sourceCard}>
+                              <div className={styles.sourceTop}>
+                                <span className={styles.sourceFile}>{s.filename}</span>
+                                <span className={styles.sourcePage}>Page {s.page}</span>
+                                <span className={styles.sourceScore}>{Math.round(s.score * 100)}%</span>
+                              </div>
+                              {/* Metadata tags */}
+                              <div className={styles.sourceTags}>
+                                {s.domain  && s.domain  !== 'Inconnu' && <span className={`${styles.sourceTag} ${styles.tagDomain}`}>{s.domain}</span>}
+                                {s.country && s.country !== 'Inconnu' && <span className={`${styles.sourceTag} ${styles.tagCountry}`}>{s.country}</span>}
+                                {s.donor   && s.donor   !== 'Inconnu' && <span className={`${styles.sourceTag} ${styles.tagDonor}`}>{s.donor}</span>}
+                                {s.year    && s.year    !== 'Inconnu' && <span className={`${styles.sourceTag} ${styles.tagYear}`}>{s.year}</span>}
+                              </div>
+                              <p className={styles.sourceExcerpt}>{s.excerpt}</p>
+                              {/* Required profiles */}
+                              {s.profiles?.length > 0 && (
+                                <div className={styles.sourceSection}>
+                                  <span className={styles.sourceSectionLabel}><ProfileIcon /> Profils exigés</span>
+                                  <ul className={styles.sourceSectionList}>
+                                    {s.profiles.map((p, pi) => <li key={pi}>{p}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                              {/* Required competencies */}
+                              {s.competencies?.length > 0 && (
+                                <div className={styles.sourceSection}>
+                                  <span className={styles.sourceSectionLabel}><SkillIcon /> Compétences exigées</span>
+                                  <ul className={styles.sourceSectionList}>
+                                    {s.competencies.map((c, ci) => <li key={ci}>{c}</li>)}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )}
+                  {/* Similar missions */}
+                  {msg.similar_missions?.length > 0 && (
+                    <div className={styles.similarBlock}>
+                      <span className={styles.similarLabel}><SimilarIcon /> Missions similaires</span>
+                      <div className={styles.similarList}>
+                        {msg.similar_missions.map((m, i) => (
+                          <div key={i} className={styles.similarCard}>
+                            <div className={styles.similarTop}>
+                              <span className={styles.similarFile}>{m.filename}</span>
+                              <span className={styles.sourceScore}>{Math.round(m.score * 100)}%</span>
+                            </div>
+                            <div className={styles.sourceTags}>
+                              {m.domain  && m.domain  !== 'Inconnu' && <span className={`${styles.sourceTag} ${styles.tagDomain}`}>{m.domain}</span>}
+                              {m.country && m.country !== 'Inconnu' && <span className={`${styles.sourceTag} ${styles.tagCountry}`}>{m.country}</span>}
+                              {m.donor   && m.donor   !== 'Inconnu' && <span className={`${styles.sourceTag} ${styles.tagDonor}`}>{m.donor}</span>}
+                              {m.year    && m.year    !== 'Inconnu' && <span className={`${styles.sourceTag} ${styles.tagYear}`}>{m.year}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </>
-        )}
-      </main>
+            )
+          ))}
+
+          {/* Typing indicator */}
+          {loading && (
+            <div className={styles.assistantTurn}>
+              <div className={styles.assistantIcon}><SparkleIcon /></div>
+              <div className={styles.typingIndicator}>
+                <span /><span /><span />
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && !loading && (
+            <div className={styles.ragBanner}>
+              <RagIcon />
+              <div>
+                <strong>Erreur</strong>
+                <p>{error}</p>
+              </div>
+            </div>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      {/* ── INPUT BAR ──────────────────────────────────────────── */}
+      <div className={styles.inputBar}>
+        <div className={styles.inputInner}>
+
+          {/* Filter panel */}
+          {filtersOpen && (
+            <div className={styles.filterPanel}>
+              {Object.entries(FILTER_LABELS).map(([key, label]) => {
+                const options = availableFilters[key] || []
+                if (options.length === 0) return null
+                return (
+                  <div key={key} className={styles.filterGroup}>
+                    <span className={styles.filterGroupLabel}>{label}</span>
+                    <div className={styles.filterChips}>
+                      {options.map(val => (
+                        <button
+                          key={val}
+                          className={`${styles.filterChip} ${activeFilters[key]?.includes(val) ? styles.filterChipActive : ''}`}
+                          onClick={() => toggleFilter(key, val)}
+                          type="button"
+                        >
+                          {val}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+              {activeFilterCount > 0 && (
+                <button className={styles.clearFiltersBtn} onClick={clearFilters} type="button">
+                  Effacer les filtres
+                </button>
+              )}
+            </div>
+          )}
+
+          <form className={styles.searchForm} onSubmit={handleSubmit}>
+            <div className={styles.searchBox}>
+              <SearchIcon />
+              <textarea
+                ref={el => { textareaRef.current = el; inputRef.current = el }}
+                value={query}
+                onChange={e => { setQuery(e.target.value); autoResize() }}
+                onKeyDown={handleKeyDown}
+                placeholder="Posez une question sur les TdR…"
+                className={styles.searchInput}
+                rows={1}
+                autoFocus
+              />
+              {query && (
+                <button type="button" className={styles.clearBtn}
+                  onClick={() => { setQuery(''); if (textareaRef.current) textareaRef.current.style.height = 'auto' }}>
+                  ×
+                </button>
+              )}
+            </div>
+            <button type="submit" className={styles.searchBtn} disabled={loading || !query.trim()}>
+              {loading ? <SmallSpinner /> : <SendIcon />}
+            </button>
+          </form>
+          <div className={styles.inputMeta}>
+            <button
+              type="button"
+              className={`${styles.filterToggleBtn} ${filtersOpen ? styles.filterToggleBtnActive : ''}`}
+              onClick={() => setFiltersOpen(o => !o)}
+            >
+              <FilterIcon />
+              Filtres
+              {activeFilterCount > 0 && (
+                <span className={styles.filterBadge}>{activeFilterCount}</span>
+              )}
+            </button>
+            <p className={styles.inputHint}>Entrée pour envoyer · Maj+Entrée pour nouvelle ligne</p>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
@@ -192,12 +387,21 @@ export default function UserDashboard() {
 }
 
 /* ── Icons ──────────────────────────────────────────────────────── */
-function SearchIcon()  { return <svg className={styles.searchIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> }
-function SearchArrow() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg> }
-function LogoutIcon()  { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> }
+function SearchIcon() {
+  return <svg className={styles.searchIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+}
+function SendIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+}
+function LogoutIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+}
+function PlusIcon() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+}
 function BigSearchIcon() {
   return (
-    <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" style={{width:64,height:64,opacity:0.25}}>
+    <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width:64, height:64, opacity:0.25 }}>
       <circle cx="34" cy="34" r="22" stroke="#FFE600" strokeWidth="4"/>
       <line x1="50.5" y1="50.5" x2="70" y2="70" stroke="#FFE600" strokeWidth="4" strokeLinecap="round"/>
       <line x1="26" y1="34" x2="42" y2="34" stroke="#FFE600" strokeWidth="3" strokeLinecap="round"/>
@@ -207,23 +411,49 @@ function BigSearchIcon() {
 }
 function SmallSpinner() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-    style={{animation:'spin .75s linear infinite', display:'block'}}>
+    style={{ animation:'spin .75s linear infinite', display:'block' }}>
     <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
     <path d="M12 2a10 10 0 0110 10"/>
   </svg>
 }
 function RagIcon() {
-  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}>
     <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
   </svg>
 }
 function SparkleIcon() {
-  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
   </svg>
 }
 function DocIcon() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+  </svg>
+}
+function FilterIcon() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+  </svg>
+}
+function ChevronIcon({ open }) {
+  return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+    style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition:'transform 0.2s' }}>
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+}
+function ProfileIcon() {
+  return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </svg>
+}
+function SkillIcon() {
+  return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+  </svg>
+}
+function SimilarIcon() {
+  return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="3" width="7" height="9" rx="1"/><rect x="15" y="3" width="7" height="9" rx="1"/><rect x="2" y="16" width="7" height="5" rx="1"/><rect x="15" y="16" width="7" height="5" rx="1"/>
   </svg>
 }
