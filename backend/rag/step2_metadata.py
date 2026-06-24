@@ -292,8 +292,8 @@ COUNTRIES = {
     "Cameroun":       ["cameroun", "yaounde", "douala"],
     "RDC":            ["rdc", "congo democratique", "kinshasa"],
     "RCA":            ["rca", "centrafrique", "bangui"],
-    "Congo":          ["congo-brazzaville", "brazzaville"],
-    "Guinee":         ["guinee", "conakry"],
+    "Congo":          ["congo-brazzaville", "brazzaville", "republique du congo", "conkouati"],
+    "Guinee":         ["republique de guinee", "guinee conakry", "conakry"],
     "Tchad":          ["tchad", "ndjamena"],
     "Ethiopie":       ["ethiopie", "addis"],
     "Kenya":          ["kenya", "nairobi"],
@@ -338,6 +338,7 @@ DONORS = {
     "BAD":              ["banque africaine de developpement", "african development bank"],
     "Enabel / DGD":     ["enabel", "ctb", "dgd", "cooperation belge"],
     "JICA":             ["jica"],
+    "AMC / Canada":     ["affaires mondiales canada", "global affairs canada", "cooperation canadienne", "agence canadienne"],
 }
 
 DOMAINS = {
@@ -370,7 +371,7 @@ def extract_metadata(text: str, filename: str) -> dict:
 
     # Year
     years = re.findall(r'\b(20[01]\d|202\d)\b', filename + " " + text[:3000])
-    year  = max(set(years), key=years.count) if years else "Inconnu"
+    year  = max(years) if years else "Inconnu"
 
     # Country
     scores      = {c: _score(sample, [_norm(k) for k in kws]) for c, kws in COUNTRIES.items()}

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
@@ -23,9 +23,6 @@ export default function UserDashboard() {
   const [error, setError]           = useState('')
   const [profileOpen, setProfileOpen] = useState(false)
   const [expandedSources, setExpandedSources] = useState({})
-  const [availableFilters, setAvailableFilters] = useState({})
-  const [activeFilters, setActiveFilters]       = useState({ country: [], region: [], domain: [], donor: [], year: [] })
-  const [filtersOpen, setFiltersOpen]           = useState(false)
 
   const bottomRef  = useRef(null)
   const inputRef   = useRef(null)
@@ -34,10 +31,6 @@ export default function UserDashboard() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
-
-  useEffect(() => {
-    api.getFilters().then(setAvailableFilters).catch(() => {})
-  }, [])
 
   const autoResize = () => {
     const ta = textareaRef.current
@@ -61,7 +54,7 @@ export default function UserDashboard() {
     const history = prevMessages.map(m => ({ role: m.role, content: m.content }))
 
     try {
-      const data = await api.search(trimmed, history, activeFilters)
+      const data = await api.search(trimmed, history)
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: data.answer || '',
@@ -75,7 +68,7 @@ export default function UserDashboard() {
       setLoading(false)
       inputRef.current?.focus()
     }
-  }, [query, messages, loading, activeFilters])
+  }, [query, messages, loading])
 
   const handleSubmit    = e => { e.preventDefault(); doSearch() }
   const handleSuggestion = s => doSearch(s)
@@ -92,34 +85,6 @@ export default function UserDashboard() {
   }
   const toggleSources = idx =>
     setExpandedSources(prev => ({ ...prev, [idx]: !prev[idx] }))
-
-  const toggleFilter = (category, value) => {
-    setActiveFilters(prev => {
-      const current = prev[category] || []
-      return {
-        ...prev,
-        [category]: current.includes(value)
-          ? current.filter(v => v !== value)
-          : [...current, value],
-      }
-    })
-  }
-
-  const clearFilters = () =>
-    setActiveFilters({ country: [], region: [], domain: [], donor: [], year: [] })
-
-  const activeFilterCount = useMemo(
-    () => Object.values(activeFilters).reduce((sum, arr) => sum + arr.length, 0),
-    [activeFilters]
-  )
-
-  const FILTER_LABELS = {
-    domain:  'Domaine',
-    country: 'Pays',
-    region:  'Région',
-    donor:   'Bailleur de fonds',
-    year:    'Année',
-  }
 
   return (
     <>
@@ -306,38 +271,6 @@ export default function UserDashboard() {
       <div className={styles.inputBar}>
         <div className={styles.inputInner}>
 
-          {/* Filter panel */}
-          {filtersOpen && (
-            <div className={styles.filterPanel}>
-              {Object.entries(FILTER_LABELS).map(([key, label]) => {
-                const options = availableFilters[key] || []
-                if (options.length === 0) return null
-                return (
-                  <div key={key} className={styles.filterGroup}>
-                    <span className={styles.filterGroupLabel}>{label}</span>
-                    <div className={styles.filterChips}>
-                      {options.map(val => (
-                        <button
-                          key={val}
-                          className={`${styles.filterChip} ${activeFilters[key]?.includes(val) ? styles.filterChipActive : ''}`}
-                          onClick={() => toggleFilter(key, val)}
-                          type="button"
-                        >
-                          {val}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-              {activeFilterCount > 0 && (
-                <button className={styles.clearFiltersBtn} onClick={clearFilters} type="button">
-                  Effacer les filtres
-                </button>
-              )}
-            </div>
-          )}
-
           <form className={styles.searchForm} onSubmit={handleSubmit}>
             <div className={styles.searchBox}>
               <SearchIcon />
@@ -363,17 +296,6 @@ export default function UserDashboard() {
             </button>
           </form>
           <div className={styles.inputMeta}>
-            <button
-              type="button"
-              className={`${styles.filterToggleBtn} ${filtersOpen ? styles.filterToggleBtnActive : ''}`}
-              onClick={() => setFiltersOpen(o => !o)}
-            >
-              <FilterIcon />
-              Filtres
-              {activeFilterCount > 0 && (
-                <span className={styles.filterBadge}>{activeFilterCount}</span>
-              )}
-            </button>
             <p className={styles.inputHint}>Entrée pour envoyer · Maj+Entrée pour nouvelle ligne</p>
           </div>
         </div>
@@ -429,11 +351,6 @@ function SparkleIcon() {
 function DocIcon() {
   return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
-  </svg>
-}
-function FilterIcon() {
-  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
   </svg>
 }
 function ChevronIcon({ open }) {

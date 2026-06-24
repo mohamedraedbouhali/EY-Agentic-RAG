@@ -108,7 +108,7 @@ def search_tdr(body: SearchRequest, _=Depends(get_current_user)):
     if collection_count() == 0:
         raise HTTPException(
             status_code=503,
-            detail="RAG pipeline not ready. Run index_documents.py first.",
+            detail="RAG pipeline not ready. Run main.py first.",
         )
 
     try:
@@ -118,11 +118,11 @@ def search_tdr(body: SearchRequest, _=Depends(get_current_user)):
 
     try:
         filters = body.filters.model_dump()
-        hits    = search(query_vec, top_k=8, filters=filters)
+        hits    = search(query_vec, top_k=15, filters=filters)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erreur de recherche vectorielle: {exc}")
 
-    MIN_SCORE = 0.40
+    MIN_SCORE = 0.30
     hits = [h for h in hits if h["score"] >= MIN_SCORE and _is_meaningful(h["text"])]
 
     # No relevant chunks found — return standard message without calling the LLM

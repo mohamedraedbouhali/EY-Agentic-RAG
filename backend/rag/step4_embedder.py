@@ -1,6 +1,6 @@
 import re
 
-MODEL_NAME = "ibm-granite/granite-embedding-278m-multilingual"
+MODEL_NAME = "BAAI/bge-m3"
 
 _model = None
 

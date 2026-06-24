@@ -13,7 +13,7 @@
 [![Status](https://img.shields.io/badge/status-internal-lightgrey?style=flat-square)]()
 [![Made for](https://img.shields.io/badge/made%20for-EY-FFE600?style=flat-square)]()
 
-54 documents · recursive character chunking (800 chars · 150 overlap) · TDR auto-classifier · IBM Granite multilingual embeddings · sub-second retrieval
+54 documents · semantic chunking (BGE-M3 · similarity threshold 0.75 · 512 token ceiling) · TDR auto-classifier · BGE-M3 multilingual embeddings · sub-second retrieval
 
 </div>
 
@@ -56,12 +56,11 @@ PDF files
                        + TDR classifier (is_tdr · tdr_confidence · tdr_label)
    |
    v
-[step3 — Chunker]     Recursive Character Splitter
-                       separators: \n\n → \n → ". " → " " → ""
-                       chunk_size = 800 chars · overlap = 150 chars
+[step3 — Chunker]     Semantic Chunker (BGE-M3 sentence embeddings)
+                       similarity_threshold = 0.75 · chunk_size = 512 tokens · overlap = 100 tokens
    |
    v
-[step4 — Embedder]    IBM Granite (granite-embedding-278m-multilingual)
+[step4 — Embedder]    BAAI/bge-m3
    |
    v
 [step5 — ChromaDB]    cosine / HNSW index  <----+
@@ -88,7 +87,7 @@ Answer + Citations + TDR badge + Similar Missions
 | Frontend | React + Vite | User & Admin dashboards |
 | Backend | FastAPI (Python) | API, auth, orchestration |
 | Database | MongoDB | Users, accounts, metadata |
-| Embeddings | IBM Granite 278M multilingual | Turns text into searchable vectors |
+| Embeddings | BAAI/bge-m3 (570M, 1024-dim) | Turns text into searchable vectors |
 | Vector Store | ChromaDB (cosine / HNSW) | Fast similarity search |
 | LLM | Groq — llama-3.1-8b-instant | Generates grounded answers |
 | OCR | EasyOCR (fr + en) + pdf2image | Extracts text from scanned pages |
@@ -136,23 +135,34 @@ Every document is analysed (filename + first 15 000 characters) to extract:
 
 ### 3 — Chunking (`rag/step3_chunker.py`)
 
-**Strategy: Recursive Character Splitting**
+**Strategy: Semantic Chunking**
 
-| Parameter | Value |
-|---|---|
-| `CHUNK_SIZE` | 800 characters (~130 words) |
-| `OVERLAP` | 150 characters (~25 words) |
-| Separators (priority order) | `\n\n` → `\n` → `". "` → `"? "` → `"! "` → `"; "` → `" "` → `""` |
+| Parameter | Value | Role |
+|---|---|---|
+| `SIMILARITY_THRESHOLD` | `0.75` | Split where cosine similarity between consecutive windows drops below this value |
+| `CHUNK_SIZE` | `512` tokens | Hard token ceiling — oversized semantic chunks are split here as a safety net |
+| `OVERLAP` | `100` tokens | Tokens carried into the next chunk when the ceiling is hit |
+| `WINDOW_SIZE` | `3` sentences | Each sentence is embedded with its neighbours for richer context |
 
-The splitter tries paragraph breaks (`\n\n`) first. Any piece still larger than `CHUNK_SIZE` is recursed with the next separator, down to raw characters as a last resort. Small pieces are then greedily merged back up to `CHUNK_SIZE`, carrying the last 200 characters of each chunk into the start of the next (the overlap). This ensures a TDR section and its bullet list stay in the same chunk rather than being split arbitrarily.
+**How it works:**
+
+1. The document is split into sentences on `.`, `!`, `?` and newlines.
+2. Each sentence gets a **context window** (itself + 1 sentence before and after), which is embedded using BGE-M3.
+3. Cosine similarity is computed between every pair of consecutive windows.
+4. Wherever similarity drops **below 0.75**, a chunk boundary is inserted — that is where the topic changes.
+5. Sentences between two boundaries are joined into one semantic chunk.
+6. Any resulting chunk that exceeds 512 tokens is hard-split with 100-token overlap as a safety net.
+
+This ensures each chunk is topically coherent rather than cut at an arbitrary character or token boundary.
 
 ### 4 — Embedding (`rag/step4_embedder.py`)
 
-Model: **ibm-granite/granite-embedding-278m-multilingual**
+Model: **BAAI/bge-m3**
 
-- Multilingual — handles French and English documents seamlessly
+- 570M parameters · 1024-dimensional vectors · 8192-token context
+- 100+ languages — handles French and English documents seamlessly
 - Embeddings are L2-normalized before storage
-- Same model used for both indexing and query embedding
+- Same model used for both chunking (sentence windows) and final indexing/query embedding
 
 ### 5 — Vector Store (`rag/step5_vector_store.py`)
 
@@ -188,10 +198,8 @@ The `Filters` model accepts `only_tdr: bool` — set to `true` to restrict the s
 
 | Model | Params | Dimensions | Max Tokens | Languages | Status |
 |---|---|---|---|---|---|
-| `BAAI/bge-m3` | 570M | 1024 | 8192 | 100+ | Replaced (v1) |
-| `ibm-granite/granite-embedding-278m-multilingual` | 278M | 768 | 512 | Multilingual | **Current** |
-
-> **BGE-M3** is recommended for production — better French retrieval, 8192-token context, and hybrid dense+sparse search. Switch by changing `MODEL_NAME` in `step4_embedder.py` then re-indexing.
+| `ibm-granite/granite-embedding-278m-multilingual` | 278M | 768 | 512 | Multilingual | Replaced |
+| `BAAI/bge-m3` | 570M | 1024 | 8192 | 100+ | **Current** |
 
 ### LLM (Generation)
 
@@ -201,11 +209,13 @@ The `Filters` model accepts `only_tdr: bool` — set to `true` to restrict the s
 
 ### Chunking Configuration History
 
-| Version | CHUNK_SIZE | OVERLAP | ~Words/chunk | Estimated chunks | Notes |
-|---|---|---|---|---|---|
-| v1 (original) | 1500 chars | 200 chars | ~250 words | ~450 | Rich context, less precise |
-| v2 | 500 chars | 100 chars | ~83 words | ~1350 | Too granular, thin context |
-| **v3 (current)** | **800 chars** | **150 chars** | **~130 words** | **~850** | **Best balance for TdR docs** |
+| Version | Strategy | CHUNK_SIZE | OVERLAP | Notes |
+|---|---|---|---|---|
+| v1 | Recursive character | 1500 chars | 200 chars | Rich context, less precise |
+| v2 | Recursive character | 500 chars | 100 chars | Too granular, thin context |
+| v3 | Recursive character | 800 chars | 150 chars | Best balance for character splitting |
+| v4 | Token-based recursive | 512 tokens | 100 tokens | Accurate token counting via tiktoken |
+| **v5 (current)** | **Semantic (BGE-M3)** | **512 tokens** | **100 tokens** | **Topic-aware splits · threshold 0.75** |
 
 ---
 
@@ -343,7 +353,7 @@ Place PDF files in `data/`, then:
 
 ```bash
 cd backend
-python index_documents.py
+python main.py
 ```
 
 Re-run if you add new PDFs or change the embedding model (choose `y` to re-index from scratch).
@@ -353,7 +363,7 @@ Re-run if you add new PDFs or change the embedding model (choose `y` to re-index
 **Terminal 1 — Backend:**
 ```bash
 cd backend
-uvicorn main:app --reload
+uvicorn app:app --reload
 ```
 
 **Terminal 2 — Frontend:**
@@ -403,7 +413,7 @@ New registrations require admin approval before login.
 | Profile & competency extraction | Consultant profiles and required skills surfaced automatically |
 | Similar missions | Related TdR documents shown alongside each answer |
 | Relevance threshold | 0.40 cosine-similarity floor filters irrelevant chunks |
-| Recursive chunking | Structure-aware splitter keeps paragraphs and sections intact |
+| Semantic chunking | BGE-M3 sentence embeddings detect topic changes (threshold 0.75) — each chunk is topically coherent |
 | Admin Dashboard | Manage users (approve, revoke, create, delete) |
 | RAG evaluation script | `metrics.py` computes coverage, MRR, hit rate, faithfulness, relevancy, latency — outputs `metrics_results.json` |
 
@@ -421,16 +431,16 @@ ey-agentic-rag/
 │   ├── rag/
 │   │   ├── step1_extractor.py     <- PDF text + table extraction + EasyOCR fallback
 │   │   ├── step2_metadata.py      <- Country/region/donor/domain/year + TDR classifier
-│   │   ├── step3_chunker.py       <- Recursive Character Splitter (800 chars, 150 overlap)
-│   │   ├── step4_embedder.py      <- IBM Granite multilingual embeddings
+│   │   ├── step3_chunker.py       <- Semantic Chunker (BGE-M3, threshold 0.75, 512 token ceiling)
+│   │   ├── step4_embedder.py      <- BAAI/bge-m3 embeddings (used for chunking + indexing + queries)
 │   │   ├── step5_vector_store.py  <- ChromaDB storage, search, TDR filter, score threshold
 │   │   └── step6_generator.py     <- LLM answer generation with conversation memory
 │   ├── routers/
 │   │   ├── auth.py                <- Login, register, profile
 │   │   ├── admin.py               <- User management
 │   │   └── search.py              <- RAG search, filters (incl. only_tdr), TDR badge, similar missions
-│   ├── main.py                    <- FastAPI app entry point
-│   ├── index_documents.py         <- One-time indexing script (shows TDR badge per document)
+│   ├── app.py                     <- FastAPI app entry point
+│   ├── main.py                    <- One-time indexing script (shows TDR badge per document)
 │   ├── metrics.py                 <- RAG evaluation script (retrieval + generation + latency)
 │   ├── filters_cache.json         <- Available filter values (auto-generated)
 │   ├── metrics_results.json       <- Evaluation output (auto-generated by metrics.py)
@@ -455,6 +465,22 @@ ey-agentic-rag/
 ## Suivi des échanges (Changelog)
 
 This section tracks all significant changes made during development sessions.
+
+---
+
+### Session — 2026-06-24
+
+**Améliorations apportées**
+
+| Fichier | Changement |
+|---|---|
+| `rag/step3_chunker.py` | Remplacement du token-based recursive splitter par un **Semantic Chunker** : embeddings BGE-M3 par fenêtre de 3 phrases, seuil de similarité cosinus fixe à **0.75**, plafond de **512 tokens** avec overlap de 100 tokens. Suppression de la dépendance numpy (cosinus calculé en pur Python). |
+| `rag/step4_embedder.py` | Retour au modèle **BAAI/bge-m3** (570M, 1024 dims, 8192 tokens) — utilisé à la fois pendant le chunking (fenêtres de phrases) et pour l'indexation finale et les requêtes. |
+| `backend/main.py` | Renommage de `index_documents.py` → `main.py` (script d'indexation). |
+| `backend/app.py` | Renommage de `main.py` → `app.py` (entrée FastAPI). |
+| `requirements.txt` | Ajout de `tiktoken` (comptage de tokens via cl100k_base). |
+| `commands.txt` | Commande de lancement mise à jour : `uvicorn app:app --reload`. |
+| `routers/search.py`, `metrics.py`, `test_fixes.py` | Références à `index_documents.py` mises à jour vers `main.py`. |
 
 ---
 
@@ -504,7 +530,7 @@ This section tracks all significant changes made during development sessions.
 | `rag/step3_chunker.py` | Remplacement du découpage fixe (500 mots) par un **Recursive Character Splitter** : séparateurs `\n\n → \n → ". " → " " → ""`, `CHUNK_SIZE = 1 500 chars`, `OVERLAP = 200 chars`. Préserve les limites naturelles de paragraphes et de phrases. |
 | `rag/step5_vector_store.py` | Stockage de `is_tdr`, `tdr_confidence`, `tdr_label` dans les métadonnées ChromaDB. Support du filtre `only_tdr` (`{"is_tdr": {"$eq": true}}`). Retour de ces champs dans les résultats de recherche. |
 | `routers/search.py` | Ajout de `only_tdr: bool` dans le modèle `Filters`. Retour de `is_tdr`, `tdr_confidence`, `tdr_label` dans `sources` et `similar_missions`. |
-| `index_documents.py` | Affichage d'un badge `[TDR XX%]` ou `[NON-TDR]` par document lors de l'indexation, avec score TDR et label. Résumé final TDR vs non-TDR avec liste des fichiers non-TDR. |
+| `main.py` (ex `index_documents.py`) | Affichage d'un badge `[TDR XX%]` ou `[NON-TDR]` par document lors de l'indexation, avec score TDR et label. Résumé final TDR vs non-TDR avec liste des fichiers non-TDR. |
 
 ---
 

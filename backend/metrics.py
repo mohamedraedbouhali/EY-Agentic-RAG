@@ -329,7 +329,7 @@ def main():
 
     count = collection_count()
     if count == 0:
-        print("ERROR: no chunks indexed. Run index_documents.py first.")
+        print("ERROR: no chunks indexed. Run main.py first.")
         sys.exit(1)
     print(f"  Indexed chunks : {count}")
     print(f"  Top-K          : {args.top_k}")

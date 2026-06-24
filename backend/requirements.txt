@@ -13,3 +13,4 @@ pdf2image
 Pillow
 numpy
 easyocr
+tiktoken

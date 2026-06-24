@@ -84,7 +84,14 @@ def extract_text_from_pdf(pdf_path: str) -> str:
                 for i, table in enumerate(tables, start=1):
                     md = table_to_markdown(table)
                     if md:
-                        full_text += f"\n[Tableau {i} – Page {page_num}]\n{md}\n"
+                        # Extract header row words to build a semantic context label
+                        header_words = " ".join(
+                            str(cell or "").strip()
+                            for cell in (table[0] if table else [])
+                            if cell and str(cell).strip()
+                        )
+                        context_label = f"Tableau de critères et pondération — {header_words}" if header_words else "Tableau de données"
+                        full_text += f"\n[Tableau {i} – Page {page_num}] {context_label}:\n{md}\n"
     except Exception as e:
         print(f"  [!] Error reading {pdf_path}: {e}")
     return full_text

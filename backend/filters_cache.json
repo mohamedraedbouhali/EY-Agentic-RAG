@@ -1,12 +1,12 @@
 {
   "country": [
+    "Burkina Faso",
     "Cameroun",
+    "Congo",
     "Cote d'Ivoire",
-    "Guinee",
     "Mali",
     "Maroc",
     "Mauritanie",
-    "Niger",
     "RCA",
     "RDC",
     "Tunisie"
@@ -35,21 +35,17 @@
     "Union Europeenne"
   ],
   "year": [
-    "2001",
-    "2006",
-    "2009",
-    "2011",
+    "2010",
     "2014",
     "2015",
-    "2017",
     "2018",
     "2019",
     "2020",
     "2021",
     "2022",
     "2023",
-    "2024",
     "2025",
-    "2026"
+    "2026",
+    "2027"
   ]
 }

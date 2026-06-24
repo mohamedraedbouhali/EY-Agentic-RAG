@@ -10,7 +10,7 @@ net start MongoDB
 2. Start Backend (Terminal 1)
 ------------------------------
 cd C:\Users\LENOVO\Desktop\ey-agentic-rag\backend
-uvicorn main:app --reload
+uvicorn app:app --reload
 
 → Wait for: ✅ Embedding model warmed up
 
