@@ -1,9 +1,12 @@
 import os
 import re
 import json
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from auth_utils       import get_current_user
+from bson import ObjectId
+from auth_utils             import get_current_user
+from database               import conversations_col
 from rag.step4_embedder     import embed_query
 from rag.step5_vector_store import search, collection_count
 from rag.step6_generator    import generate_answer
@@ -100,8 +103,35 @@ def _extract_profiles_competencies(chunks: list[dict]) -> tuple[list, list]:
     return profiles[:4], competencies[:4]
 
 
+@router.get("/history")
+def get_history(current_user=Depends(get_current_user)):
+    uid = str(current_user["_id"])
+    docs = list(
+        conversations_col.find({"user_id": uid}, {"_id": 0})
+        .sort("timestamp", 1)
+        .limit(100)
+    )
+    return docs
+
+
+@router.delete("/history")
+def clear_history(current_user=Depends(get_current_user)):
+    uid = str(current_user["_id"])
+    conversations_col.delete_many({"user_id": uid})
+    return {"deleted": True}
+
+
+def _save_messages(user_id: str, query: str, answer: str, sources: list, similar_missions: list):
+    now = datetime.now(timezone.utc)
+    conversations_col.insert_many([
+        {"user_id": user_id, "role": "user",      "content": query,  "timestamp": now},
+        {"user_id": user_id, "role": "assistant",  "content": answer,
+         "sources": sources, "similar_missions": similar_missions, "timestamp": now},
+    ])
+
+
 @router.post("/tdr")
-def search_tdr(body: SearchRequest, _=Depends(get_current_user)):
+def search_tdr(body: SearchRequest, current_user=Depends(get_current_user)):
     if not body.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
@@ -127,12 +157,9 @@ def search_tdr(body: SearchRequest, _=Depends(get_current_user)):
 
     # No relevant chunks found — return standard message without calling the LLM
     if not hits:
-        return {
-            "answer":           "Cette information ne figure pas dans les documents fournis.",
-            "sources":          [],
-            "similar_missions": [],
-            "query":            body.query,
-        }
+        answer = "Cette information ne figure pas dans les documents fournis."
+        _save_messages(str(current_user["_id"]), body.query, answer, [], [])
+        return {"answer": answer, "sources": [], "similar_missions": [], "query": body.query}
 
     # Limit history to prevent Groq context overflow
     history = [{"role": m.role, "content": m.content} for m in body.history][-MAX_HISTORY:]
@@ -187,6 +214,7 @@ def search_tdr(body: SearchRequest, _=Depends(get_current_user)):
             "tdr_label":      s.get("tdr_label", "Indéterminé"),
         })
 
+    _save_messages(str(current_user["_id"]), body.query, answer, sources, similar_missions)
     return {
         "answer":           answer,
         "sources":          sources,

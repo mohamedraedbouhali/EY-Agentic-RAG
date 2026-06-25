@@ -37,8 +37,10 @@ export const api = {
   updateMe: (data)             => req('PUT',  '/auth/me', data),
 
   // ── Search ────────────────────────────────
-  search:     (query, history = [], filters = {}) => req('POST', '/search/tdr', { query, history, filters }, 60000),
-  getFilters: ()                                   => req('GET',  '/search/filters'),
+  search:       (query, history = [], filters = {}) => req('POST',   '/search/tdr',     { query, history, filters }, 60000),
+  getFilters:   ()                                   => req('GET',    '/search/filters'),
+  getHistory:   ()                                   => req('GET',    '/search/history'),
+  clearHistory: ()                                   => req('DELETE', '/search/history'),
 
   // ── Admin ─────────────────────────────────
   getUsers:    ()               => req('GET',    '/admin/users'),

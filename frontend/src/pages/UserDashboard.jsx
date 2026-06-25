@@ -20,6 +20,7 @@ export default function UserDashboard() {
   const [query, setQuery]           = useState('')
   const [messages, setMessages]     = useState([])   // [{role, content, sources?}]
   const [loading, setLoading]       = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(true)
   const [error, setError]           = useState('')
   const [profileOpen, setProfileOpen] = useState(false)
   const [expandedSources, setExpandedSources] = useState({})
@@ -27,6 +28,14 @@ export default function UserDashboard() {
   const bottomRef  = useRef(null)
   const inputRef   = useRef(null)
   const textareaRef = useRef(null)
+
+  // Load persistent history on mount
+  useEffect(() => {
+    api.getHistory()
+      .then(msgs => setMessages(msgs))
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false))
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -75,13 +84,14 @@ export default function UserDashboard() {
   const handleKeyDown   = e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSearch() }
   }
-  const handleNewConversation = () => {
+  const handleNewConversation = async () => {
     setMessages([])
     setError('')
     setQuery('')
     setExpandedSources({})
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     inputRef.current?.focus()
+    try { await api.clearHistory() } catch {}
   }
   const toggleSources = idx =>
     setExpandedSources(prev => ({ ...prev, [idx]: !prev[idx] }))
@@ -136,20 +146,21 @@ export default function UserDashboard() {
         <div className={styles.chatInner}>
 
           {/* Empty state */}
-          {messages.length === 0 && !loading && !error && (
+          {messages.length === 0 && !loading && !error && !historyLoading && (
             <div className={styles.emptyState}>
-              <div className={styles.emptyIcon}><BigSearchIcon /></div>
-              <h3 className={styles.emptyTitle}>Interrogez les Documents TdR</h3>
-              <p className={styles.emptyText}>
-                Posez une question en langage naturel. Le système retrouvera
-                les passages pertinents et générera une réponse basée sur vos documents.
-              </p>
-              <div className={styles.suggestions}>
-                <span className={styles.suggestLabel}>Exemples :</span>
-                {SUGGESTIONS.map(s => (
-                  <button key={s} className={styles.suggestChip}
-                    onClick={() => handleSuggestion(s)}>{s}</button>
-                ))}
+              <div className={styles.emptyLogoWrap}>
+                <div className={styles.emptyLogoHalo} />
+                <div className={styles.emptyLogoRing} />
+                <EYLogo />
+              </div>
+              <div className={styles.emptyHeadingGroup}>
+                <p className={styles.emptyOverline}>EY · Agentic Intelligence</p>
+                <h3 className={styles.emptyTitle}>Interrogez les Documents TdR</h3>
+                <div className={styles.emptyDivider}><span /></div>
+                <p className={styles.emptyText}>
+                  Posez une question en langage naturel. Le système retrouvera
+                  les passages pertinents et générera une réponse basée sur vos documents.
+                </p>
               </div>
             </div>
           )}
@@ -181,7 +192,6 @@ export default function UserDashboard() {
                               <div className={styles.sourceTop}>
                                 <span className={styles.sourceFile}>{s.filename}</span>
                                 <span className={styles.sourcePage}>Page {s.page}</span>
-                                <span className={styles.sourceScore}>{Math.round(s.score * 100)}%</span>
                               </div>
                               {/* Metadata tags */}
                               <div className={styles.sourceTags}>
@@ -224,7 +234,6 @@ export default function UserDashboard() {
                           <div key={i} className={styles.similarCard}>
                             <div className={styles.similarTop}>
                               <span className={styles.similarFile}>{m.filename}</span>
-                              <span className={styles.sourceScore}>{Math.round(m.score * 100)}%</span>
                             </div>
                             <div className={styles.sourceTags}>
                               {m.domain  && m.domain  !== 'Inconnu' && <span className={`${styles.sourceTag} ${styles.tagDomain}`}>{m.domain}</span>}
@@ -321,15 +330,8 @@ function LogoutIcon() {
 function PlusIcon() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 }
-function BigSearchIcon() {
-  return (
-    <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width:64, height:64, opacity:0.25 }}>
-      <circle cx="34" cy="34" r="22" stroke="#FFE600" strokeWidth="4"/>
-      <line x1="50.5" y1="50.5" x2="70" y2="70" stroke="#FFE600" strokeWidth="4" strokeLinecap="round"/>
-      <line x1="26" y1="34" x2="42" y2="34" stroke="#FFE600" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="34" y1="26" x2="34" y2="42" stroke="#FFE600" strokeWidth="3" strokeLinecap="round"/>
-    </svg>
-  )
+function EYLogo() {
+  return <img src="/ey.jpg" alt="EY" style={{ width: 110, height: 110, objectFit: 'contain', borderRadius: 20, position: 'relative', zIndex: 1, boxShadow: '0 12px 40px rgba(46,46,56,0.18)' }} />
 }
 function SmallSpinner() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"

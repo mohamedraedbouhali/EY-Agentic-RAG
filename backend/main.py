@@ -19,10 +19,29 @@ load_dotenv()
 from rag.step1_extractor    import load_all_pdfs
 from rag.step3_chunker      import split_into_chunks
 from rag.step4_embedder     import embed_documents
-from rag.step5_vector_store import store_chunks, collection_count, clear_collection
+from rag.step5_vector_store import store_chunks
 from rag.step2_metadata     import extract_metadata
 
 DATA_FOLDER    = os.path.join(os.path.dirname(__file__), "..", "data")
+
+
+def _filter_chunks(chunks: list[dict]) -> list[dict]:
+    """Remove garbage chunks: page markers, empty table rows, section numbers, etc."""
+    import re
+    def _clean(t):
+        t = re.sub(r'\[Page \d+\]', '', t)
+        t = re.sub(r'\[Tableau[^\]]*\]', '', t)
+        t = re.sub(r'\|[-\s|:]+\|', ' ', t)
+        t = re.sub(r'\|', ' ', t)
+        t = re.sub(r'\s+', ' ', t).strip()
+        return t
+    result = []
+    for c in chunks:
+        cleaned = _clean(c["text"])
+        if len(cleaned.split()) >= 20:
+            result.append(c)
+    return result
+CHROMA_PATH    = os.path.join(os.path.dirname(__file__), "chroma_db")
 FILTERS_CACHE  = os.path.join(os.path.dirname(__file__), "filters_cache.json")
 
 
@@ -35,12 +54,14 @@ def main():
         print(f"ERROR: data folder not found at {DATA_FOLDER}")
         sys.exit(1)
 
-    existing = collection_count()
-    if existing > 0:
-        answer = input(f"\n{existing} chunks already indexed. Re-index from scratch? (y/n): ").strip().lower()
+    # Check for existing index using the folder — avoids initialising ChromaDB
+    # with the old collection (which would cache the wrong embedding dimension)
+    if os.path.exists(CHROMA_PATH) and os.listdir(CHROMA_PATH):
+        answer = input("\nExisting index found. Re-index from scratch? (y/n): ").strip().lower()
         if answer == "y":
+            import shutil
             print("Clearing existing index...")
-            clear_collection()
+            shutil.rmtree(CHROMA_PATH)
         else:
             print("Aborted. Existing index kept.")
             return
@@ -70,6 +91,7 @@ def main():
                 filter_values[key].add(val)
 
         chunks = split_into_chunks(doc["text"], doc["filename"])
+        chunks = _filter_chunks(chunks)
         for chunk in chunks:
             chunk.update(meta)
         all_chunks.extend(chunks)

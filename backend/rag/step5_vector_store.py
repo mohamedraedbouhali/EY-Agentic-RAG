@@ -114,5 +114,10 @@ def collection_count() -> int:
 
 
 def clear_collection():
-    col = get_collection()
-    col.delete(where={"source": {"$ne": ""}})
+    global _client, _collection
+    import shutil
+    _client     = None
+    _collection = None
+    chroma_path = os.path.abspath(CHROMA_PATH)
+    if os.path.exists(chroma_path):
+        shutil.rmtree(chroma_path)

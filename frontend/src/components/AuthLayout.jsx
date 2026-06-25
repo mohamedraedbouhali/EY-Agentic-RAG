@@ -47,8 +47,8 @@ export default function AuthLayout({ children, panelAnim }) {
               Ernst &amp; Young · Agentic Intelligence
             </p>
             <h1 className={styles.tagline}>
-              Building a<br />better&nbsp;
-              <span className={styles.shimmer}>working world</span>
+              Shape the future<br />with&nbsp;
+              <span className={styles.shimmer}>confidence</span>
             </h1>
             <p className={styles.sub}>
               AI-powered intelligence platform for Tender Reference Documents —

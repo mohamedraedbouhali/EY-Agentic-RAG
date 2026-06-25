@@ -468,6 +468,18 @@ This section tracks all significant changes made during development sessions.
 
 ---
 
+### Session — 2026-06-25
+
+**Améliorations apportées**
+
+| Fichier | Changement |
+|---|---|
+| `frontend/src/pages/UserDashboard.jsx` | Remplacement de l'icône loupe (`BigSearchIcon`) par le **logo EY** (`ey.jpg`) dans l'état vide. Refonte complète du composant : ajout d'un wrapper `emptyLogoWrap` avec halo radial animé et anneau lumineux, d'un badge overline "EY · Agentic Intelligence", d'un séparateur dégradé jaune, et reformulation du label des suggestions ("Essayez :"). |
+| `frontend/src/pages/UserDashboard.module.css` | Nouveaux styles pour l'état vide : `.emptyLogoWrap` (positionnement relatif), `.emptyLogoHalo` (animation `haloPulse` — glow jaune radial), `.emptyLogoRing` (animation `ringFade` — bordure jaune clignotante), `.emptyHeadingGroup` / `.emptyOverline` / `.emptyDivider`. Chips améliorées : hover avec élévation `translateY(-1px)` et ombre portée. |
+| `backend/rag/step4_embedder.py` | Ajout du mode **offline** : `SentenceTransformer(MODEL_NAME, local_files_only=True)` avec fallback vers le téléchargement si le modèle n'est pas en cache. Résout l'erreur `[Errno 11001] getaddrinfo failed` lorsque HuggingFace Hub est inaccessible (pas de connexion réseau). |
+
+---
+
 ### Session — 2026-06-24
 
 **Améliorations apportées**
@@ -567,6 +579,6 @@ This section tracks all significant changes made during development sessions.
 
 <div align="center">
 
-Built for EY · RAG pipeline powered by IBM Granite, ChromaDB & Groq
+Built for EY · RAG pipeline powered by BGE-M3, ChromaDB & Groq
 
 </div>

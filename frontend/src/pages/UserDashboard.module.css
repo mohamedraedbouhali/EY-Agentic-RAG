@@ -201,59 +201,164 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 12px;
+  gap: 36px;
   padding: 60px 20px;
 }
 
-.emptyIcon { margin-bottom: 8px; }
+/* Logo wrapper */
+.emptyLogoWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 160px;
+  height: 160px;
+  animation: floatLogo 4s ease-in-out infinite;
+}
+
+/* Outer glow blob */
+.emptyLogoHalo {
+  position: absolute;
+  inset: -30px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,230,0,0.22) 0%, rgba(255,230,0,0.06) 50%, transparent 75%);
+  animation: haloPulse 4s ease-in-out infinite;
+  filter: blur(6px);
+}
+
+/* Rotating dashed ring */
+.emptyLogoRing {
+  position: absolute;
+  inset: -12px;
+  border-radius: 28px;
+  border: 2px dashed rgba(255,230,0,0.5);
+  animation: ringRotate 12s linear infinite;
+}
+
+/* Second static ring */
+.emptyLogoRing::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,230,0,0.2);
+}
+
+@keyframes floatLogo {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+
+@keyframes haloPulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.12); }
+}
+
+@keyframes ringRotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Heading group */
+.emptyHeadingGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.emptyOverline {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #FFE600;
+  background: #2E2E38;
+  padding: 5px 18px;
+  border-radius: 20px;
+  margin: 0;
+  box-shadow: 0 2px 12px rgba(46,46,56,0.18);
+}
 
 .emptyTitle {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 30px;
+  font-weight: 800;
   color: #2E2E38;
   margin: 0;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
+.emptyDivider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.emptyDivider span {
+  display: block;
+  width: 64px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, #FFE600, transparent);
+  animation: dividerGlow 3s ease-in-out infinite;
+}
+
+@keyframes dividerGlow {
+  0%, 100% { opacity: 0.6; width: 48px; }
+  50%       { opacity: 1;   width: 80px; }
 }
 
 .emptyText {
-  font-size: 13.5px;
+  font-size: 15px;
   color: #747480;
-  max-width: 460px;
-  line-height: 1.65;
+  max-width: 440px;
+  line-height: 1.75;
   margin: 0;
 }
 
+/* Suggestions */
 .suggestions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
-  margin-top: 8px;
+  max-width: 620px;
 }
 
 .suggestLabel {
   font-size: 11.5px;
   color: #A0A0A8;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  width: 100%;
+  text-align: center;
+  margin-bottom: 2px;
 }
 
 .suggestChip {
   background: #fff;
-  border: 1px solid #E0E0E8;
-  color: #747480;
+  border: 1.5px solid #E8E8F0;
+  color: #4A4A58;
   font-size: 12px;
   font-weight: 500;
-  padding: 6px 14px;
-  border-radius: 20px;
+  padding: 7px 16px;
+  border-radius: 24px;
   cursor: pointer;
   font-family: inherit;
-  transition: all 0.15s;
+  transition: all 0.18s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .suggestChip:hover {
   background: #2E2E38;
   border-color: #2E2E38;
   color: #FFE600;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(46,46,56,0.18);
 }
 
 /* ── User turn ────────────────────────────────────────────────── */
@@ -837,10 +942,9 @@
   .logoutBtn span { display: none; }
   .logoutBtn { padding: 7px 10px; }
 
-  .emptyTitle { font-size: 16px; }
-  .emptyText  { font-size: 12.5px; }
-  .suggestions { flex-direction: column; align-items: flex-start; }
-  .suggestChip { font-size: 11.5px; }
+  .emptyTitle { font-size: 22px; }
+  .emptyText  { font-size: 13.5px; }
+  .emptyLogoWrap { width: 120px; height: 120px; }
 
   .answerText { font-size: 13px; }
   .userBubble { font-size: 13px; max-width: 92%; }
