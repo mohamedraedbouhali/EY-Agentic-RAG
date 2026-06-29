@@ -69,7 +69,7 @@ def _clean_excerpt(text: str) -> str:
 
 
 def _is_meaningful(text: str) -> bool:
-    return len(_clean_excerpt(text).split()) >= 15
+    return len(_clean_excerpt(text).split()) >= 8
 
 
 def _extract_profiles_competencies(chunks: list[dict]) -> tuple[list, list]:

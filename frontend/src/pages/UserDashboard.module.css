@@ -519,6 +519,13 @@
   white-space: nowrap;
 }
 
+.sourceTopRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .sourceScore {
   font-size: 11px;
   font-weight: 700;

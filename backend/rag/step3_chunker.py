@@ -2,7 +2,7 @@ import re
 import tiktoken
 
 CHUNK_SIZE           = 512   # max tokens per chunk (hard ceiling)
-OVERLAP              = 100   # tokens carried over when a semantic chunk is too large
+OVERLAP              = 50    # tokens carried over when a semantic chunk is too large
 WINDOW_SIZE          = 3     # sentences merged into each embedding window for context
 SIMILARITY_THRESHOLD = 0.65  # split where cosine similarity drops below this value (0–1)
 

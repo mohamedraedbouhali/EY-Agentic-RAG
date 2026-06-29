@@ -38,8 +38,19 @@ def _filter_chunks(chunks: list[dict]) -> list[dict]:
     result = []
     for c in chunks:
         cleaned = _clean(c["text"])
-        if len(cleaned.split()) >= 20:
-            result.append(c)
+        words = cleaned.split()
+        if len(words) < 8:
+            continue
+        # Drop repetitive chunks — low unique word ratio
+        unique_ratio = len(set(w.lower() for w in words)) / len(words)
+        if unique_ratio < 0.35:
+            continue
+        # Drop chunks where any 2-word phrase repeats more than 3 times
+        from collections import Counter
+        bigrams = [f"{words[i].lower()} {words[i+1].lower()}" for i in range(len(words) - 1)]
+        if bigrams and max(Counter(bigrams).values()) > 3:
+            continue
+        result.append(c)
     return result
 CHROMA_PATH    = os.path.join(os.path.dirname(__file__), "chroma_db")
 FILTERS_CACHE  = os.path.join(os.path.dirname(__file__), "filters_cache.json")

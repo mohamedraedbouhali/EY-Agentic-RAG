@@ -24,17 +24,23 @@ export default function UserDashboard() {
   const [error, setError]           = useState('')
   const [profileOpen, setProfileOpen] = useState(false)
   const [expandedSources, setExpandedSources] = useState({})
+  const [availableFilters, setAvailableFilters] = useState({})
+  const [selectedFilters, setSelectedFilters] = useState({ domain: [], country: [], donor: [], year: [] })
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false)
 
   const bottomRef  = useRef(null)
   const inputRef   = useRef(null)
   const textareaRef = useRef(null)
 
-  // Load persistent history on mount
+  // Load persistent history and available filters on mount
   useEffect(() => {
     api.getHistory()
       .then(msgs => setMessages(msgs))
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
+    api.getFilters()
+      .then(f => setAvailableFilters(f))
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -63,7 +69,7 @@ export default function UserDashboard() {
     const history = prevMessages.map(m => ({ role: m.role, content: m.content }))
 
     try {
-      const data = await api.search(trimmed, history)
+      const data = await api.search(trimmed, history, selectedFilters)
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: data.answer || '',
@@ -95,6 +101,19 @@ export default function UserDashboard() {
   }
   const toggleSources = idx =>
     setExpandedSources(prev => ({ ...prev, [idx]: !prev[idx] }))
+
+  const toggleFilter = (key, value) =>
+    setSelectedFilters(prev => ({
+      ...prev,
+      [key]: prev[key].includes(value)
+        ? prev[key].filter(v => v !== value)
+        : [...prev[key], value],
+    }))
+
+  const clearFilters = () =>
+    setSelectedFilters({ domain: [], country: [], donor: [], year: [] })
+
+  const activeFilterCount = Object.values(selectedFilters).flat().length
 
   return (
     <>
@@ -191,7 +210,10 @@ export default function UserDashboard() {
                             <div key={i} className={styles.sourceCard}>
                               <div className={styles.sourceTop}>
                                 <span className={styles.sourceFile}>{s.filename}</span>
-                                <span className={styles.sourcePage}>Page {s.page}</span>
+                                <div className={styles.sourceTopRight}>
+                                  <span className={styles.sourceScore}>{(s.score * 100).toFixed(0)}%</span>
+                                  <span className={styles.sourcePage}>Page {s.page}</span>
+                                </div>
                               </div>
                               {/* Metadata tags */}
                               <div className={styles.sourceTags}>
@@ -280,6 +302,39 @@ export default function UserDashboard() {
       <div className={styles.inputBar}>
         <div className={styles.inputInner}>
 
+          {/* Filter panel */}
+          {filterPanelOpen && (
+            <div className={styles.filterPanel}>
+              {[
+                { key: 'domain',  label: 'Domaine',  values: availableFilters.domain  || [] },
+                { key: 'country', label: 'Pays',     values: availableFilters.country || [] },
+                { key: 'donor',   label: 'Bailleur', values: availableFilters.donor   || [] },
+                { key: 'year',    label: 'Année',    values: availableFilters.year    || [] },
+              ].filter(g => g.values.length > 0).map(group => (
+                <div key={group.key} className={styles.filterGroup}>
+                  <span className={styles.filterGroupLabel}>{group.label}</span>
+                  <div className={styles.filterChips}>
+                    {group.values.map(v => (
+                      <button
+                        key={v}
+                        type="button"
+                        className={`${styles.filterChip}${selectedFilters[group.key].includes(v) ? ' ' + styles.filterChipActive : ''}`}
+                        onClick={() => toggleFilter(group.key, v)}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {activeFilterCount > 0 && (
+                <button type="button" className={styles.clearFiltersBtn} onClick={clearFilters}>
+                  Effacer les filtres
+                </button>
+              )}
+            </div>
+          )}
+
           <form className={styles.searchForm} onSubmit={handleSubmit}>
             <div className={styles.searchBox}>
               <SearchIcon />
@@ -305,6 +360,17 @@ export default function UserDashboard() {
             </button>
           </form>
           <div className={styles.inputMeta}>
+            <button
+              type="button"
+              className={`${styles.filterToggleBtn}${filterPanelOpen ? ' ' + styles.filterToggleBtnActive : ''}`}
+              onClick={() => setFilterPanelOpen(o => !o)}
+            >
+              <FilterIcon />
+              Filtres
+              {activeFilterCount > 0 && (
+                <span className={styles.filterBadge}>{activeFilterCount}</span>
+              )}
+            </button>
             <p className={styles.inputHint}>Entrée pour envoyer · Maj+Entrée pour nouvelle ligne</p>
           </div>
         </div>
@@ -374,5 +440,10 @@ function SkillIcon() {
 function SimilarIcon() {
   return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="3" width="7" height="9" rx="1"/><rect x="15" y="3" width="7" height="9" rx="1"/><rect x="2" y="16" width="7" height="5" rx="1"/><rect x="15" y="16" width="7" height="5" rx="1"/>
+  </svg>
+}
+function FilterIcon() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
   </svg>
 }

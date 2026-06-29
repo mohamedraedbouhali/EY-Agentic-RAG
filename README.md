@@ -13,7 +13,7 @@
 [![Status](https://img.shields.io/badge/status-internal-lightgrey?style=flat-square)]()
 [![Made for](https://img.shields.io/badge/made%20for-EY-FFE600?style=flat-square)]()
 
-54 documents · semantic chunking (BGE-M3 · similarity threshold 0.75 · 512 token ceiling) · TDR auto-classifier · BGE-M3 multilingual embeddings · sub-second retrieval
+54 documents · semantic chunking (BGE-M3 · similarity threshold 0.65 · 512 token ceiling) · TDR auto-classifier · BGE-M3 multilingual embeddings · sub-second retrieval · Docker-ready
 
 </div>
 
@@ -57,7 +57,7 @@ PDF files
    |
    v
 [step3 — Chunker]     Semantic Chunker (BGE-M3 sentence embeddings)
-                       similarity_threshold = 0.75 · chunk_size = 512 tokens · overlap = 100 tokens
+                       similarity_threshold = 0.65 · chunk_size = 512 tokens · overlap = 50 tokens
    |
    v
 [step4 — Embedder]    BAAI/bge-m3
@@ -71,7 +71,7 @@ User Query                                        |
 [step4 — Embedder]    same Granite model          |
    |                                              |
    v                                              |
-[Vector Search]       top 8 chunks · score >= 0.40 · optional only_tdr filter
+[Vector Search]       top 8 chunks · score >= 0.30 · optional only_tdr filter
    |
    v
 [step6 — Groq LLM]   llama-3.1-8b-instant
@@ -91,6 +91,7 @@ Answer + Citations + TDR badge + Similar Missions
 | Vector Store | ChromaDB (cosine / HNSW) | Fast similarity search |
 | LLM | Groq — llama-3.1-8b-instant | Generates grounded answers |
 | OCR | EasyOCR (fr + en) + pdf2image | Extracts text from scanned pages |
+| Containers | Docker + Docker Compose | One-command deployment |
 
 ---
 
@@ -139,9 +140,9 @@ Every document is analysed (filename + first 15 000 characters) to extract:
 
 | Parameter | Value | Role |
 |---|---|---|
-| `SIMILARITY_THRESHOLD` | `0.75` | Split where cosine similarity between consecutive windows drops below this value |
+| `SIMILARITY_THRESHOLD` | `0.65` | Split where cosine similarity between consecutive windows drops below this value |
 | `CHUNK_SIZE` | `512` tokens | Hard token ceiling — oversized semantic chunks are split here as a safety net |
-| `OVERLAP` | `100` tokens | Tokens carried into the next chunk when the ceiling is hit |
+| `OVERLAP` | `50` tokens | Tokens carried into the next chunk when the ceiling is hit |
 | `WINDOW_SIZE` | `3` sentences | Each sentence is embedded with its neighbours for richer context |
 
 **How it works:**
@@ -149,9 +150,9 @@ Every document is analysed (filename + first 15 000 characters) to extract:
 1. The document is split into sentences on `.`, `!`, `?` and newlines.
 2. Each sentence gets a **context window** (itself + 1 sentence before and after), which is embedded using BGE-M3.
 3. Cosine similarity is computed between every pair of consecutive windows.
-4. Wherever similarity drops **below 0.75**, a chunk boundary is inserted — that is where the topic changes.
+4. Wherever similarity drops **below 0.65**, a chunk boundary is inserted — that is where the topic changes.
 5. Sentences between two boundaries are joined into one semantic chunk.
-6. Any resulting chunk that exceeds 512 tokens is hard-split with 100-token overlap as a safety net.
+6. Any resulting chunk that exceeds 512 tokens is hard-split with 50-token overlap as a safety net.
 
 This ensures each chunk is topically coherent rather than cut at an arbitrary character or token boundary.
 
@@ -171,7 +172,7 @@ Model: **BAAI/bge-m3**
 - Similarity metric: cosine (via HNSW index)
 - Returns the top 8 most similar chunks per query
 - Score: `1 − cosine_distance`
-- Minimum relevance threshold of **0.40** — chunks below this are discarded
+- Minimum relevance threshold of **0.30** — chunks below this are discarded
 - Stored metadata per chunk: `source`, `page`, `chunk_index`, `country`, `region`, `domain`, `donor`, `year`, `is_tdr`, `tdr_confidence`, `tdr_label`
 - Supports `only_tdr` filter: when enabled, restricts retrieval to chunks from TDR-classified documents only
 
@@ -215,7 +216,8 @@ The `Filters` model accepts `only_tdr: bool` — set to `true` to restrict the s
 | v2 | Recursive character | 500 chars | 100 chars | Too granular, thin context |
 | v3 | Recursive character | 800 chars | 150 chars | Best balance for character splitting |
 | v4 | Token-based recursive | 512 tokens | 100 tokens | Accurate token counting via tiktoken |
-| **v5 (current)** | **Semantic (BGE-M3)** | **512 tokens** | **100 tokens** | **Topic-aware splits · threshold 0.75** |
+| v5 | Semantic (BGE-M3) | 512 tokens | 100 tokens | Topic-aware splits · threshold 0.75 |
+| **v6 (current)** | **Semantic (BGE-M3)** | **512 tokens** | **50 tokens** | **Threshold lowered to 0.65 · reduced overlap to limit chunk boundary bleed** |
 
 ---
 
@@ -300,7 +302,34 @@ Adding `relevant_sources` unlocks `hit_rate`, `mrr`, and `precision_at_K`. Witho
 
 ## Quickstart
 
-### Prerequisites
+Two options: **Docker** (recommended, zero setup) or **local dev**.
+
+### Option A — Docker (recommended)
+
+```bash
+# 1. Configure your env file
+cp backend/.env.example backend/.env
+# Edit backend/.env and set GROQ_API_KEY
+
+# 2. Build and start all containers
+docker compose up --build
+
+# 3. Index documents (first time only)
+docker compose exec backend python main.py
+```
+
+Services start at:
+- Frontend → `http://localhost:3000`
+- Backend API → `http://localhost:8000`
+- MongoDB → `localhost:27017` (internal)
+
+> Volumes `chroma_data`, `mongo_data`, and `hf_cache` persist between restarts — you won't need to re-index every time.
+
+---
+
+### Option B — Local dev
+
+#### Prerequisites
 
 | Requirement | Notes |
 |---|---|
@@ -308,7 +337,7 @@ Adding `relevant_sources` unlocks `hit_rate`, `mrr`, and `precision_at_K`. Witho
 | Node.js 18+ | |
 | MongoDB | running on `localhost:27017` |
 | Groq API key | [console.groq.com](https://console.groq.com) |
-| Poppler | path set in `rag/extractor.py` (for OCR) |
+| Poppler | path set in `rag/step1_extractor.py` (for OCR) |
 
 ### 1 — Configure environment
 
@@ -412,8 +441,11 @@ New registrations require admin approval before login.
 | Source citations | Every answer links to the exact file and page |
 | Profile & competency extraction | Consultant profiles and required skills surfaced automatically |
 | Similar missions | Related TdR documents shown alongside each answer |
-| Relevance threshold | 0.40 cosine-similarity floor filters irrelevant chunks |
-| Semantic chunking | BGE-M3 sentence embeddings detect topic changes (threshold 0.75) — each chunk is topically coherent |
+| Relevance threshold | 0.30 cosine-similarity floor filters irrelevant chunks |
+| Semantic chunking | BGE-M3 sentence embeddings detect topic changes (threshold 0.65) — each chunk is topically coherent |
+| Score badge on sources | Each source card shows the cosine similarity score as a % badge |
+| Garbage chunk filter | Chunks with low unique-word ratio (< 35%) or repeated bigrams are dropped at indexing time |
+| Docker support | `docker compose up --build` starts MongoDB + backend + frontend — appears in Docker Desktop |
 | Admin Dashboard | Manage users (approve, revoke, create, delete) |
 | RAG evaluation script | `metrics.py` computes coverage, MRR, hit rate, faithfulness, relevancy, latency — outputs `metrics_results.json` |
 
@@ -426,6 +458,13 @@ ey-agentic-rag/
 ├── data/                          <- Place PDF files here
 │   └── not_tdrs/                  <- Non-TDR files moved here by check_tdrs.py
 ├── check_tdrs.py                  <- Pre-indexing TDR file sorter (optional)
+├── docker-compose.yml             <- Orchestrates mongo + backend + frontend
+├── backend/
+│   ├── Dockerfile                 <- Python 3.12-slim image, CPU-only torch
+│   ├── .dockerignore
+├── frontend/
+│   ├── Dockerfile                 <- Node builder → nginx:alpine
+│   ├── nginx.conf                 <- SPA routing + /api proxy to backend
 ├── backend/
 │   ├── chroma_db/                 <- ChromaDB vector store (auto-generated)
 │   ├── rag/
@@ -465,6 +504,36 @@ ey-agentic-rag/
 ## Suivi des échanges (Changelog)
 
 This section tracks all significant changes made during development sessions.
+
+---
+
+### Session — 2026-06-29
+
+**Améliorations apportées**
+
+| Fichier | Changement |
+|---|---|
+| `rag/step3_chunker.py` | `OVERLAP` réduit de 100 → **50 tokens** pour limiter le chevauchement entre chunks et réduire la redondance dans les résultats. `SIMILARITY_THRESHOLD` abaissé de 0.75 → **0.65** pour des découpages thématiques plus fins. |
+| `rag/step1_extractor.py` | Refonte complète de `table_to_natural` : suppression du préfixe hardcodé "Modalité de paiement :" et du format "le montant X est de Y". Nouvelle logique : détection automatique de la ligne d'en-têtes (cellules sans `-` ni valeurs numériques `%/€`), formatage `Header : Valeur` pour chaque ligne de données. Gestion correcte des tableaux complexes multi-colonnes (ex. Article 9 ATDEPA). Ajout de `import re` en tête de fichier. |
+| `backend/main.py` | Ajout de `_filter_chunks` : filtre les chunks parasites à l'indexation — ratio mots uniques < 35% et bigrammes répétés plus de 3 fois sont éliminés. Seuil de longueur minimum à **8 mots** (au lieu de 20). |
+| `routers/search.py` | Seuil `MIN_SCORE` abaissé de 0.40 → **0.30** pour améliorer la couverture sur les documents courts. Seuil `_is_meaningful` abaissé de 20 → **8 mots** pour ne plus filtrer les tableaux courts (ex. paiement 30%/70%). |
+| `frontend/src/pages/UserDashboard.jsx` | Ajout d'un **badge score** sur chaque carte source : affiche la similarité cosinus en % (ex. `87%`) à côté du numéro de page. |
+| `frontend/src/pages/UserDashboard.module.css` | Ajout de `.sourceTopRight` (flex row, gap 6px) et `.sourceScore` (badge vert arrondi) pour le badge de score. |
+| `backend/app.py` | Ajout de `http://localhost:3000` dans `allow_origins` CORS (port Docker frontend). Warmup de l'embedding model déplacé dans un thread background pour ne pas bloquer le démarrage. |
+| `backend/Dockerfile` | Nouveau : image `python:3.12-slim`, installation séparée de `torch==2.3.1` CPU-only via `--index-url https://download.pytorch.org/whl/cpu` pour éviter le téléchargement de la variante CUDA (2.5 Go). |
+| `frontend/Dockerfile` | Nouveau : build multi-stage — `node:20-alpine` pour `npm run build`, `nginx:alpine` pour servir les fichiers statiques. |
+| `frontend/nginx.conf` | Nouveau : routing SPA (`try_files $uri /index.html`) + proxy `/api/` → `http://backend:8000/`. |
+| `docker-compose.yml` | Nouveau : orchestre 3 services (`mongo`, `backend`, `frontend`) avec volumes persistants (`mongo_data`, `chroma_data`, `hf_cache`). |
+| `backend/.dockerignore` / `frontend/.dockerignore` | Nouveaux : excluent `chroma_db/`, `node_modules/`, `__pycache__/` du contexte Docker. |
+
+**Problèmes résolus**
+
+| # | Problème | Cause | Solution |
+|---|---|---|---|
+| 1 | Table 30%/70% absente des réponses (EBSOMED) | Chunk de ~14 mots filtré par le seuil `_is_meaningful` à 20 mots + format `table_to_natural` peu lisible | Seuil abaissé à 8 mots + nouveau format `Key : Value` sans préfixe hardcodé |
+| 2 | Chunks parasites saturant les résultats | Chunks répétant "Modalité de paiement" des dizaines de fois rankés haut sur requêtes de paiement | `_filter_chunks` avec ratio mots uniques + détection bigrammes répétés |
+| 3 | Article 9 ATDEPA (tableau multi-colonnes) sans contenu dans la réponse | `table_to_natural` traitait tous les tableaux à 2 colonnes comme des tableaux paiement, produisant du texte incohérent | Détection d'en-têtes + formatage `{Header} : {Valeur}` généralisé |
+| 4 | Multiples instances uvicorn sur le port 8000 | Processus Python orphelins d'anciennes sessions | `Stop-Process` sur tous les PIDs Python avant relance |
 
 ---
 
