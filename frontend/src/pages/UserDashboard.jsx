@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import styles from './UserDashboard.module.css'
@@ -24,6 +26,7 @@ export default function UserDashboard() {
   const [error, setError]           = useState('')
   const [profileOpen, setProfileOpen] = useState(false)
   const [expandedSources, setExpandedSources] = useState({})
+  const [expandedChunks, setExpandedChunks]   = useState({})
   const [availableFilters, setAvailableFilters] = useState({})
   const [selectedFilters, setSelectedFilters] = useState({ domain: [], country: [], donor: [], year: [] })
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
@@ -75,6 +78,7 @@ export default function UserDashboard() {
         content: data.answer || '',
         sources: data.sources || [],
         similar_missions: data.similar_missions || [],
+        chunks: data.chunks || [],
       }])
     } catch (err) {
       setError(err.message || 'Erreur lors de la recherche.')
@@ -95,12 +99,16 @@ export default function UserDashboard() {
     setError('')
     setQuery('')
     setExpandedSources({})
+    setExpandedChunks({})
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     inputRef.current?.focus()
     try { await api.clearHistory() } catch {}
   }
   const toggleSources = idx =>
     setExpandedSources(prev => ({ ...prev, [idx]: !prev[idx] }))
+
+  const toggleChunks = idx =>
+    setExpandedChunks(prev => ({ ...prev, [idx]: !prev[idx] }))
 
   const toggleFilter = (key, value) =>
     setSelectedFilters(prev => ({
@@ -194,7 +202,9 @@ export default function UserDashboard() {
               <div key={idx} className={styles.assistantTurn}>
                 <div className={styles.assistantIcon}><SparkleIcon /></div>
                 <div className={styles.assistantContent}>
-                  <p className={styles.answerText}>{msg.content}</p>
+                  <div className={styles.answerText}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                  </div>
                   {msg.sources?.length > 0 && (
                     <div className={styles.sourcesBlock}>
                       <button className={styles.sourcesToggle} onClick={() => toggleSources(idx)}>
@@ -247,6 +257,34 @@ export default function UserDashboard() {
                       )}
                     </div>
                   )}
+                  {/* Raw chunks inspector */}
+                  {msg.chunks?.length > 0 && (
+                    <div className={styles.chunksBlock}>
+                      <button className={styles.chunksToggle} onClick={() => toggleChunks(idx)}>
+                        <LayersIcon />
+                        {expandedChunks[idx]
+                          ? 'Masquer les chunks'
+                          : `${msg.chunks.length} chunk${msg.chunks.length > 1 ? 's' : ''} utilisés`}
+                        <ChevronIcon open={expandedChunks[idx]} />
+                      </button>
+                      {expandedChunks[idx] && (
+                        <div className={styles.chunksList}>
+                          {msg.chunks.map((c, ci) => (
+                            <div key={ci} className={styles.chunkCard}>
+                              <div className={styles.chunkHeader}>
+                                <span className={styles.chunkIndex}>#{ci + 1}</span>
+                                <span className={styles.chunkSource}>{c.source}</span>
+                                <span className={styles.chunkMeta}>p.{c.page}</span>
+                                <span className={styles.chunkScore}>{(c.score * 100).toFixed(0)}%</span>
+                              </div>
+                              <p className={styles.chunkText}>{c.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Similar missions */}
                   {msg.similar_missions?.length > 0 && (
                     <div className={styles.similarBlock}>
@@ -445,5 +483,10 @@ function SimilarIcon() {
 function FilterIcon() {
   return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+  </svg>
+}
+function LayersIcon() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
   </svg>
 }

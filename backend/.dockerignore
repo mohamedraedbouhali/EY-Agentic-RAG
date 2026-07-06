@@ -1,5 +1,0 @@
-__pycache__/
-*.pyc
-*.pyo
-chroma_db/
-metrics_results.json

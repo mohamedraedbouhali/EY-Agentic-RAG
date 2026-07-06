@@ -415,9 +415,63 @@
   font-size: 14px;
   color: #2E2E38;
   line-height: 1.75;
-  margin: 0;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+.answerText p {
+  margin: 0 0 10px;
+}
+
+.answerText p:last-child {
+  margin-bottom: 0;
+}
+
+.answerText h2,
+.answerText h3 {
+  margin: 16px 0 8px;
+  font-weight: 600;
+  color: #1A1A24;
+}
+
+.answerText h2:first-child,
+.answerText h3:first-child {
+  margin-top: 0;
+}
+
+.answerText h2 { font-size: 16px; }
+.answerText h3 { font-size: 15px; }
+
+.answerText strong {
+  font-weight: 600;
+}
+
+.answerText ul,
+.answerText ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+.answerText li {
+  margin-bottom: 4px;
+}
+
+.answerText table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0 12px;
+  font-size: 13px;
+}
+
+.answerText th,
+.answerText td {
+  border: 1px solid #E0E0E8;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.answerText th {
+  background: #F5F5FA;
+  font-weight: 600;
 }
 
 /* ── Typing indicator ─────────────────────────────────────────── */
@@ -599,6 +653,114 @@
   color: #5A5A68;
   line-height: 1.55;
   margin-bottom: 2px;
+}
+
+/* ── Chunks inspector ─────────────────────────────────────────── */
+.chunksBlock {
+  margin-top: 10px;
+  border-top: 1px solid #F0F0F4;
+  padding-top: 10px;
+}
+
+.chunksToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid #D8D0F0;
+  color: #6B5CB8;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.chunksToggle:hover {
+  background: #F4F0FF;
+  border-color: #B0A0E0;
+  color: #4A3A90;
+}
+
+.chunksList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chunkCard {
+  background: #FAFAFF;
+  border: 1px solid #E4E0F4;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.chunkHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.chunkIndex {
+  font-size: 10px;
+  font-weight: 800;
+  color: #6B5CB8;
+  background: rgba(107,92,184,0.1);
+  border: 1px solid rgba(107,92,184,0.2);
+  padding: 2px 7px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.chunkSource {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2E2E38;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chunkMeta {
+  font-size: 10.5px;
+  color: #A0A0A8;
+  background: #EBEBF0;
+  padding: 2px 7px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.chunkScore {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #006B30;
+  background: rgba(0,140,60,0.08);
+  border: 1px solid rgba(0,140,60,0.2);
+  padding: 2px 7px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.chunkText {
+  font-size: 11.5px;
+  color: #4A4A58;
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  background: #F0EEF8;
+  border-radius: 6px;
+  padding: 8px 10px;
 }
 
 /* ── Similar missions ─────────────────────────────────────────── */

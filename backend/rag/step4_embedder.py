@@ -22,8 +22,12 @@ def _clean(text: str) -> str:
     """Strip indexing noise before embedding so the vector represents real content."""
     text = re.sub(r'\[Page \d+\]', '', text)
     text = re.sub(r'\[Tableau[^\]]*\]', '', text)
+    text = re.sub(r'<!--.*?-->', ' ', text, flags=re.DOTALL)  # pymupdf4llm picture comments
+    text = re.sub(r'</?[a-zA-Z][a-zA-Z0-9]*\s*/?>', ' ', text)  # <br>, <u>, <sup>, <mark>…
     text = re.sub(r'\|[-\s|:]+\|', ' ', text)   # table separator rows  |---|---|
     text = re.sub(r'\|', ' ', text)              # remaining pipe chars
+    text = re.sub(r'#{1,6}\s', ' ', text)        # markdown heading markers
+    text = re.sub(r'[*_`]{1,3}', '', text)       # bold/italic/code markers
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 

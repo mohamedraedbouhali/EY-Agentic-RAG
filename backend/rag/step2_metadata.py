@@ -1,4 +1,13 @@
 import re
+import unicodedata
+
+
+def _fold(s: str) -> str:
+    """Lowercase + strip accents. OCR'd documents lose their accents
+    ("references" instead of "références"), so every keyword signal must be
+    matched accent-free on BOTH sides or scanned TdRs score near zero."""
+    return (unicodedata.normalize("NFD", s)
+            .encode("ascii", "ignore").decode("ascii").lower())
 
 # =============================================================================
 # TDR DETECTION ENGINE
@@ -201,17 +210,17 @@ def classify_tdr(text: str, filename: str) -> dict:
 
     Returns: is_tdr, tdr_confidence (0-1), tdr_label, tdr_score
     """
-    fn_lower     = filename.lower()
-    title_area   = (filename + " " + text[:3000]).lower()
-    head         = (filename + " " + text[:8000]).lower()
-    full_sample  = (filename + " " + text[:15000]).lower()
+    fn_lower     = _fold(filename)
+    title_area   = _fold(filename + " " + text[:3000])
+    head         = _fold(filename + " " + text[:8000])
+    full_sample  = _fold(filename + " " + text[:15000])
 
     score = 0.0
     matched = []
 
     # Definitive signals — each worth +30, capped at 2 hits
     def_hits = 0
-    for sig in TDR_DEFINITIVE_SIGNALS:
+    for sig in map(_fold, TDR_DEFINITIVE_SIGNALS):
         if sig in full_sample:
             if def_hits < 2:
                 score += 30
@@ -224,7 +233,7 @@ def classify_tdr(text: str, filename: str) -> dict:
         matched.append("FILENAME")
 
     # Strong signals
-    for sig in TDR_STRONG_SIGNALS:
+    for sig in map(_fold, TDR_STRONG_SIGNALS):
         in_title = title_area.count(sig)
         in_head  = head.count(sig) - in_title
         if in_title > 0:
@@ -236,7 +245,7 @@ def classify_tdr(text: str, filename: str) -> dict:
 
     # Structure signals
     struct_count = 0
-    for sig in TDR_STRUCTURE_SIGNALS:
+    for sig in map(_fold, TDR_STRUCTURE_SIGNALS):
         if sig in full_sample:
             score += 2
             struct_count += 1
@@ -244,7 +253,7 @@ def classify_tdr(text: str, filename: str) -> dict:
         matched.append(f"STRUCTURE:{struct_count} sections")
 
     # Non-TDR penalties
-    for sig in NON_TDR_SIGNALS:
+    for sig in map(_fold, NON_TDR_SIGNALS):
         in_title = title_area.count(sig)
         in_body  = full_sample.count(sig) - in_title
         if in_title > 0:

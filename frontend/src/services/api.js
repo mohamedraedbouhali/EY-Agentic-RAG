@@ -1,4 +1,6 @@
-const BASE = 'http://localhost:8000'
+// Same-origin path: the Vite dev server proxies /api/* to the backend
+// (see vite.config.js). No CORS, no localhost IPv4/IPv6 resolution issues.
+const BASE = '/api'
 
 function headers() {
   const token = localStorage.getItem('ey_token')

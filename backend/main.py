@@ -26,7 +26,17 @@ DATA_FOLDER    = os.path.join(os.path.dirname(__file__), "..", "data")
 
 
 def _filter_chunks(chunks: list[dict]) -> list[dict]:
-    """Remove garbage chunks: page markers, empty table rows, section numbers, etc."""
+    """Keep every chunk with real content — only drop near-empty fragments.
+
+    Deliberately minimal. Smarter "quality" heuristics (unique-word ratio,
+    repeated-bigram detection) silently deleted legitimate sections twice
+    (SMOE objectives, CITES section 4.7): losing real content produces
+    confidently wrong answers, while storing the occasional noisy chunk is
+    nearly free — retrieval ranking and the query-time guards in
+    routers/search.py (_is_meaningful, _is_toc_chunk, score threshold)
+    keep noise out of the LLM context, and those are reversible without
+    re-indexing.
+    """
     import re
     def _clean(t):
         t = re.sub(r'\[Page \d+\]', '', t)
@@ -35,25 +45,39 @@ def _filter_chunks(chunks: list[dict]) -> list[dict]:
         t = re.sub(r'\|', ' ', t)
         t = re.sub(r'\s+', ' ', t).strip()
         return t
-    result = []
-    for c in chunks:
-        cleaned = _clean(c["text"])
-        words = cleaned.split()
-        if len(words) < 8:
-            continue
-        # Drop repetitive chunks — low unique word ratio
-        unique_ratio = len(set(w.lower() for w in words)) / len(words)
-        if unique_ratio < 0.35:
-            continue
-        # Drop chunks where any 2-word phrase repeats more than 3 times
-        from collections import Counter
-        bigrams = [f"{words[i].lower()} {words[i+1].lower()}" for i in range(len(words) - 1)]
-        if bigrams and max(Counter(bigrams).values()) > 3:
-            continue
-        result.append(c)
-    return result
+    return [c for c in chunks if len(_clean(c["text"]).split()) >= 8]
 CHROMA_PATH    = os.path.join(os.path.dirname(__file__), "chroma_db")
 FILTERS_CACHE  = os.path.join(os.path.dirname(__file__), "filters_cache.json")
+TITLES_CACHE   = os.path.join(os.path.dirname(__file__), "titles_cache.json")
+
+
+def _extract_title(markdown: str) -> str:
+    """First ~400 meaningful characters of the document (headings + opening
+    lines). Consumed only by query→document title matching, which tests
+    substring containment — so a text sample beats a single line: scanned
+    documents typically open with letterhead noise ("REPUBLIQUE TUNISIENNE",
+    picture markers) and carry their real title several lines down."""
+    parts: list[str] = []
+    total = 0
+    in_picture = False
+    for line in markdown.split("\n"):
+        line = line.strip().lstrip("#").strip()
+        # Skip pymupdf4llm picture-text blocks entirely: on scanned documents
+        # they hold logo/stamp text that eats the budget before the real title.
+        if line.startswith("<!-- Start of picture text"):
+            in_picture = True
+            continue
+        if line.startswith("<!-- End of picture text"):
+            in_picture = False
+            continue
+        if (in_picture or not line or line.startswith("[Page")
+                or line.startswith("<!--") or line.startswith("|")):
+            continue
+        parts.append(line)
+        total += len(line)
+        if total > 600:
+            break
+    return " ".join(parts)[:600]
 
 
 def main():
@@ -72,7 +96,14 @@ def main():
         if answer == "y":
             import shutil
             print("Clearing existing index...")
-            shutil.rmtree(CHROMA_PATH)
+            try:
+                shutil.rmtree(CHROMA_PATH)
+            except PermissionError:
+                print(
+                    "\nERROR: Cannot delete ChromaDB files — the backend server is still running.\n"
+                    "Stop the FastAPI server (Ctrl+C in its terminal) and re-run main.py.\n"
+                )
+                return
         else:
             print("Aborted. Existing index kept.")
             return
@@ -91,9 +122,11 @@ def main():
     filter_values = {"country": set(), "region": set(), "domain": set(), "donor": set(), "year": set()}
     tdr_docs:     list[str] = []
     non_tdr_docs: list[str] = []
+    titles_map:   dict[str, str] = {}   # filename -> title
 
     for doc in documents:
         meta = extract_metadata(doc["text"], doc["filename"])
+        titles_map[doc["filename"]] = _extract_title(doc["text"])
 
         # Collect available filter values (exclude "Inconnu" and boolean/float fields)
         for key in ("country", "region", "domain", "donor", "year"):
@@ -127,6 +160,10 @@ def main():
         print("  -> Non-TDR list:")
         for fn in non_tdr_docs:
             print(f"       - {fn}")
+
+    # Save title map for named-document detection by title
+    with open(TITLES_CACHE, "w", encoding="utf-8") as f:
+        json.dump(titles_map, f, ensure_ascii=False, indent=2)
 
     # Save filter values for the API
     cache = {k: sorted(v) for k, v in filter_values.items()}

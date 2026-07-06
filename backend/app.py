@@ -1,3 +1,14 @@
+import sys
+
+# Windows consoles default to cp1252 — reconfigure so prints with non-ASCII
+# characters (emoji, accents) never crash background threads.
+if sys.stdout and sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime

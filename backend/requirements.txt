@@ -6,6 +6,7 @@ bcrypt
 python-multipart
 python-dotenv
 pdfplumber
+pymupdf4llm
 sentence-transformers
 chromadb
 groq
@@ -14,3 +15,5 @@ Pillow
 numpy
 easyocr
 tiktoken
+
+wordfreq>=3.0
